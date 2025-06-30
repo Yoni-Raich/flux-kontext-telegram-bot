@@ -1,0 +1,4 @@
+requests
+websocket-client<1.8.0,>=1.7.0
+python-telegram-bot
+Pillow 

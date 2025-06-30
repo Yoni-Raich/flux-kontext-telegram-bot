@@ -1,0 +1,21 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment and secrets
+.env
+venv/
+.venv/
+config.py
+
+# Generated files and media
+output/
+temp_downloads/
+input_image.png
+*.log
+
+# IDE and editor directories
+.vscode/
+.idea/
