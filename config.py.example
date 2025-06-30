@@ -1,0 +1,14 @@
+# ------------------ BOT CONFIGURATION ------------------
+# Telegram Bot Token from @BotFather
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+
+# List of user IDs authorized to use the bot.
+# You can get your user ID by messaging @userinfobot on Telegram.
+AUTHORIZED_USER_IDS = [123456789, 987654321]
+
+# ------------------ COMFYUI CONFIGURATION ------------------
+# The address of the ComfyUI server.
+COMFYUI_SERVER_ADDRESS = "127.0.0.1:8001"
+
+# Path to the ComfyUI workflow JSON file.
+WORKFLOW_FILE_PATH = "workflows/flux_kontext_workflow.json" 
