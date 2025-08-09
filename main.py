@@ -2,7 +2,7 @@ import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 import config
-from bot_handler import start_command, handle_image, help_command
+from bot_handler import start_command, handle_image, help_command, handle_text_prompt
 
 # Set up logging
 logging.basicConfig(
@@ -34,6 +34,9 @@ def main():
     
     # Register the handler for images (photos)
     application.add_handler(MessageHandler(filters.PHOTO, handle_image))
+
+    # Register the handler for text prompts (no photo)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_prompt))
 
     # --- Start the Bot ---
     logger.info("Bot started and polling for messages...")
