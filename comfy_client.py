@@ -13,7 +13,7 @@ def find_node_by_class(workflow, class_type):
             return node_id
     return None
 
-def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0.1:8001", output_dir="output",image_path=None):
+def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0.1:8001", output_dir="output", image_path=None, steps=None, cfg=None):
     """
     Generates an image using a ComfyUI workflow.
 
@@ -23,6 +23,8 @@ def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0
         workflow_path (str): Path to the ComfyUI workflow JSON file.
         server_address (str, optional): The address of the ComfyUI server. Defaults to "127.0.0.1:8001".
         output_dir (str, optional): Directory to save the output image. Defaults to "output".
+        steps (int, optional): The number of steps for the image generation.
+        cfg (float, optional): The CFG scale for the image generation.
 
     Returns:
         str: The path to the generated image, or None if generation failed.
@@ -51,12 +53,23 @@ def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0
 
     # Find the correct nodes dynamically
     text_node = find_node_by_class(workflow, "CLIPTextEncode")
+    ksampler_node = find_node_by_class(workflow, "KSampler")
+    basicscheduler_node = find_node_by_class(workflow, "BasicScheduler")
     seed_node = find_node_by_class(workflow, "RandomNoise") or find_node_by_class(workflow, "KSampler")
     save_node = find_node_by_class(workflow, "SaveImage")
 
     # Update prompt text
     if text_node:
         workflow[text_node]["inputs"]["text"] = prompt_text
+
+    # Update steps/cfg if provided
+    if steps is not None:
+        if ksampler_node and "steps" in workflow[ksampler_node]["inputs"]:
+            workflow[ksampler_node]["inputs"]["steps"] = steps
+        elif basicscheduler_node and "steps" in workflow[basicscheduler_node]["inputs"]:
+            workflow[basicscheduler_node]["inputs"]["steps"] = steps
+    if cfg is not None and ksampler_node and "cfg" in workflow[ksampler_node]["inputs"]:
+        workflow[ksampler_node]["inputs"]["cfg"] = cfg
 
     # Update seed for randomness
     if seed_node:
@@ -143,6 +156,38 @@ def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0
         print("Output image not found in history.\n\n")
         return None
 
+def is_any_job_running(server_address="127.0.0.1:8001"):
+    """
+    Returns True if there is any pending or executing job in the ComfyUI queue.
+    """
+    try:
+        response = requests.get(f"http://{server_address}/queue")
+        if response.status_code != 200:
+            return False
+        queue = response.json()
+        # Check if there are any jobs in 'pending' or 'executing'
+        if queue.get("queue_running") or queue.get("queue_pending"):
+            return True
+        return False
+    except Exception as e:
+        print(f"Error checking ComfyUI queue: {e}")
+        return False
+
+def get_pending_job_count(server_address="127.0.0.1:8001"):
+    """
+    Returns the number of pending jobs in the ComfyUI queue.
+    """
+    try:
+        response = requests.get(f"http://{server_address}/queue")
+        if response.status_code != 200:
+            return 0
+        queue = response.json()
+        q_length=len(queue.get("queue_pending", []))
+        return q_length+1 if q_length > 0 else 1
+    except Exception as e:
+        print(f"Error checking ComfyUI queue: {e}")
+        return 0
+    
 if __name__ == '__main__':
     # Create a dummy image for testing if it doesn't exist
     if not os.path.exists("input_image.png"):
