@@ -46,7 +46,7 @@ Follow these steps to get your bot up and running.
     -   Open `config.py` and fill in your details:
         -   `TELEGRAM_BOT_TOKEN`: Your bot's token from [@BotFather](https://t.me/BotFather).
         -   `AUTHORIZED_USER_IDS`: A list of Telegram User IDs that are allowed to use the bot. You can get your ID from [@userinfobot](https://t.me/userinfobot).
-        -   `COMFYUI_SERVER_ADDRESS`: The address where your ComfyUI server is running (e.g., `"127.0.0.1:8188"`).
+        -   `COMFYUI_SERVER_ADDRESS`: The address where your ComfyUI server is running (e.g., `"127.0.0.1:8000"`).
 
 ## How to Run
 

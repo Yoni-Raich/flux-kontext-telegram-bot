@@ -6,8 +6,29 @@ import urllib.parse
 import requests
 import os
 import random
+from PIL import Image
 
-def generate_image(image_path: str, prompt_text: str, workflow_path: str, server_address="127.0.0.1:8001", output_dir="output"):
+def get_image_dimensions(image_path: str):
+    """
+    Extract width and height from an image file.
+    
+    Args:
+        image_path (str): Path to the image file.
+        
+    Returns:
+        tuple: A tuple containing (width, height) of the image.
+    """
+    try:
+        with Image.open(image_path) as img:
+            width, height = img.size
+            print(f"Image dimensions: {width}x{height}")
+            return width, height
+    except Exception as e:
+        print(f"Error reading image dimensions: {e}")
+        # Return default dimensions if we can't read the image
+        return 1024, 1024
+
+def generate_image(image_path: str, prompt_text: str, workflow_path: str, server_address="127.0.0.1:8000", output_dir="output"):
     """
     Generates an image using a ComfyUI workflow.
 
@@ -15,7 +36,7 @@ def generate_image(image_path: str, prompt_text: str, workflow_path: str, server
         image_path (str): Path to the input image.
         prompt_text (str): The text prompt.
         workflow_path (str): Path to the ComfyUI workflow JSON file.
-        server_address (str, optional): The address of the ComfyUI server. Defaults to "127.0.0.1:8001".
+        server_address (str, optional): The address of the ComfyUI server. Defaults to "127.0.0.1:8000".
         output_dir (str, optional): Directory to save the output image. Defaults to "output".
 
     Returns:
@@ -44,6 +65,17 @@ def generate_image(image_path: str, prompt_text: str, workflow_path: str, server
 
     # Update LoadImage node (41)
     workflow["41"]["inputs"]["image"] = image_filename
+    
+    # Get image dimensions and update the workflow
+    width, height = get_image_dimensions(image_path)
+    
+    # Update EmptySD3LatentImage node (27) with actual image dimensions
+    workflow["27"]["inputs"]["width"] = width
+    workflow["27"]["inputs"]["height"] = height
+    
+    # Update ModelSamplingFlux node (30) with actual image dimensions
+    workflow["30"]["inputs"]["width"] = width
+    workflow["30"]["inputs"]["height"] = height
     
     # Update CLIPTextEncode node (6) for the prompt
     workflow["6"]["inputs"]["text"] = prompt_text

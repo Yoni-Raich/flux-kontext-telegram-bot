@@ -8,7 +8,7 @@ AUTHORIZED_USER_IDS = [123456789, 987654321]
 
 # ------------------ COMFYUI CONFIGURATION ------------------
 # The address of the ComfyUI server.
-COMFYUI_SERVER_ADDRESS = "127.0.0.1:8001"
+COMFYUI_SERVER_ADDRESS = "127.0.0.1:8000"
 
 # Path to the ComfyUI workflow JSON file.
 WORKFLOW_FILE_PATH = "workflows/flux_kontext_workflow.json" 
