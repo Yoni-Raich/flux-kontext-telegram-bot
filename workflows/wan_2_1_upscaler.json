@@ -1,0 +1,300 @@
+{
+  "1": {
+    "inputs": {
+      "model_name": "4x-ClearRealityV1.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Load Upscale Model"
+    }
+  },
+  "3": {
+    "inputs": {
+      "anything": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "4": {
+    "inputs": {
+      "clip_name": "umt5-xxl-encoder-Q5_K_S.gguf",
+      "type": "wan"
+    },
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "CLIPLoader (GGUF)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "unet_name": "Wan14BT2VFusionX-Q4_K_S.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Unet Loader (GGUF)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": false,
+        "lora": "Wan2.1_T2V_14B_FusionX_LoRA.safetensors",
+        "strength": 1
+      },
+      "lora_2": {
+        "on": false,
+        "lora": "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
+        "strength": 1
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "5",
+        0
+      ],
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Lora Loader"
+    }
+  },
+  "10": {
+    "inputs": {
+      "text": "The Golden Arch of Storms \"Inside a dark cavern filled with floating rocks, a portal manifests as a gothic arch crackling with golden and amber lightning. The energy creates a sunset orange core that shifts to brilliant yellow at the edges. Below it gather: a merchant caravan of six beings preparing to cross, their faces lit by warm golden light, children playing with toys that spark with static electricity, guards in black armor with gold energy shields, and a navigator holding an orb that resonates with the portal's frequency, casting honey-colored shadows.\"",
+      "clip": [
+        "8",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Image caption"
+    }
+  },
+  "11": {
+    "inputs": {
+      "image": "ComfyUI_00262_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "13": {
+    "inputs": {
+      "anything": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "easy clearCacheAll",
+    "_meta": {
+      "title": "Clear Cache All"
+    }
+  },
+  "14": {
+    "inputs": {
+      "filename_prefix": "FLUX",
+      "images": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Flux Image"
+    }
+  },
+  "15": {
+    "inputs": {
+      "upscale_by": 2,
+      "seed": 286286128032438,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "deis",
+      "scheduler": "normal",
+      "denoise": 0.25,
+      "mode_type": "Linear",
+      "tile_width": 2048,
+      "tile_height": 2048,
+      "mask_blur": 16,
+      "tile_padding": 32,
+      "seam_fix_mode": "None",
+      "seam_fix_denoise": 1,
+      "seam_fix_width": 64,
+      "seam_fix_mask_blur": 16,
+      "seam_fix_padding": 16,
+      "force_uniform_tiles": true,
+      "tiled_decode": false,
+      "image": [
+        "24:23",
+        0
+      ],
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "24:20",
+        0
+      ],
+      "vae": [
+        "24:18",
+        0
+      ],
+      "upscale_model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "UltimateSDUpscale",
+    "_meta": {
+      "title": "upscale"
+    }
+  },
+  "2:0": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "2:1": {
+    "inputs": {
+      "noise_seed": 314624102635610
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "2:2": {
+    "inputs": {
+      "scheduler": "beta",
+      "steps": 10,
+      "denoise": 0.25,
+      "model": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "BasicScheduler"
+    }
+  },
+  "24:22": {
+    "inputs": {
+      "noise": [
+        "2:1",
+        0
+      ],
+      "guider": [
+        "24:21",
+        0
+      ],
+      "sampler": [
+        "2:0",
+        0
+      ],
+      "sigmas": [
+        "2:2",
+        0
+      ],
+      "latent_image": [
+        "24:19",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "24:19": {
+    "inputs": {
+      "pixels": [
+        "11",
+        0
+      ],
+      "vae": [
+        "24:18",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "24:21": {
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "conditioning": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "BasicGuider",
+    "_meta": {
+      "title": "BasicGuider"
+    }
+  },
+  "24:20": {
+    "inputs": {
+      "conditioning": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "24:23": {
+    "inputs": {
+      "samples": [
+        "24:22",
+        0
+      ],
+      "vae": [
+        "24:18",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "24:18": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "flux_vae"
+    }
+  }
+}

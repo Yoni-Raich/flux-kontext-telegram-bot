@@ -95,13 +95,6 @@
       "title": "VAE Decode"
     }
   },
-  "44": {
-    "inputs": {},
-    "class_type": "PreviewImage",
-    "_meta": {
-      "title": "Preview Image"
-    }
-  },
   "46": {
     "inputs": {
       "clip_name1": "clip_l.safetensors",

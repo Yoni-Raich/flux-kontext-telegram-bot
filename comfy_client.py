@@ -7,13 +7,32 @@ import requests
 import os
 import random
 
-def find_node_by_class(workflow, class_type):
+def find_node_by_class(workflow, class_type, neg_text=False):
     for node_id, node in workflow.items():
         if node.get("class_type") == class_type:
-            return node_id
+            # Special handling for CLIPTextEncode
+            if class_type == "CLIPTextEncode":
+                # Check if title contains "positive" (case-insensitive)
+                title = node.get("_meta", {}).get("title", "").lower()
+                if "positive" in title or ("clip text encode" in title and "negative" not in title):
+                    return node_id
+                elif neg_text:
+                    return node_id
+            else:
+                # For other class types, return immediately
+                return node_id
     return None
 
-def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0.1:8001", output_dir="output", image_path=None, steps=None, cfg=None):
+def generate_image(prompt_text: str, 
+                   workflow_path: str, 
+                   server_address="127.0.0.1:8001", 
+                   output_dir="output", 
+                   image_path=None, 
+                   flags=None, 
+                   fast_film_grain=False, 
+                   neg_prompt_text=None, 
+                   resize_resolution=None,
+                   allow_resize=False):
     """
     Generates an image using a ComfyUI workflow.
 
@@ -48,36 +67,35 @@ def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0
         print(f"Image uploaded as: {image_filename}\n\n")
 
     # 2. Load and update the workflow
-    with open(workflow_path, 'r') as f:
+    with open(workflow_path, 'r', encoding='utf-8') as f:
         workflow = json.load(f)
 
     # Find the correct nodes dynamically
     text_node = find_node_by_class(workflow, "CLIPTextEncode")
+    if neg_prompt_text:
+        neg_prompt_text_node = find_node_by_class(workflow, "CLIPTextEncode", neg_text=True)
     ksampler_node = find_node_by_class(workflow, "KSampler")
     basicscheduler_node = find_node_by_class(workflow, "BasicScheduler")
     seed_node = find_node_by_class(workflow, "RandomNoise") or find_node_by_class(workflow, "KSampler")
     save_node = find_node_by_class(workflow, "SaveImage")
+    upscaler_node = find_node_by_class(workflow, "UltimateSDUpscale")
 
     # Update prompt text
-    if text_node:
-        workflow[text_node]["inputs"]["text"] = prompt_text
+    update_prompt_text(workflow, text_node, prompt_text, 
+                      neg_prompt_text_node if neg_prompt_text else None, neg_prompt_text)
 
-    # Update steps/cfg if provided
-    if steps is not None:
-        if ksampler_node and "steps" in workflow[ksampler_node]["inputs"]:
-            workflow[ksampler_node]["inputs"]["steps"] = steps
-        elif basicscheduler_node and "steps" in workflow[basicscheduler_node]["inputs"]:
-            workflow[basicscheduler_node]["inputs"]["steps"] = steps
-    if cfg is not None and ksampler_node and "cfg" in workflow[ksampler_node]["inputs"]:
-        workflow[ksampler_node]["inputs"]["cfg"] = cfg
+    # Update steps/cfg
+    update_sampling_params(workflow, ksampler_node, basicscheduler_node, flags or {})
 
-    # Update seed for randomness
-    if seed_node:
-        # Try both possible keys for seed
-        if "noise_seed" in workflow[seed_node]["inputs"]:
-            workflow[seed_node]["inputs"]["noise_seed"] = random.randint(0, 2**64 - 1)
-        elif "seed" in workflow[seed_node]["inputs"]:
-            workflow[seed_node]["inputs"]["seed"] = random.randint(0, 2**64 - 1)
+    # Update seed
+    seed_val = update_seed(workflow, seed_node, upscaler_node, flags or {})
+
+    # Update denoise parameters
+    update_denoise(workflow, basicscheduler_node, upscaler_node, flags or {})
+
+    # Update resolution if provided
+    update_resolution(workflow, resize_resolution, allow_resize)
+
 
     # For image-to-image, update LoadImage node if present
     if image_path:
@@ -110,7 +128,7 @@ def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0
             out = ws.recv()
             if isinstance(out, str):
                 message = json.loads(out)
-                if message.get('type') == 'executing' and message.get('data', {}).get('node') is None:
+                if (message.get('type') == 'executing' and message.get('data', {}).get('node') is None) or (message.get('type') == 'executed' and message.get('data', {}).get('prompt_id') == prompt_id):
                     if message.get('data', {}).get('prompt_id') == prompt_id:
                         print("Execution finished.\n\n")
                         break # Execution is done for our prompt
@@ -130,9 +148,15 @@ def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0
         return None
 
     prompt_history = history[prompt_id]
+
+    # Calculate duration using your existing function
+    duration = get_duration_from_history(prompt_history)
+    if duration:
+        print(f"Generation took: {duration:.1f} seconds\n\n")
+    
     outputs = prompt_history.get('outputs', {})
     
-    # Find the output from the SaveImage node (9)
+    # Find the output from the SaveImage node
     if save_node and 'images' in outputs.get(save_node, {}):
         image_info = outputs[save_node]['images'][0]
         filename = image_info['filename']
@@ -151,10 +175,43 @@ def generate_image(prompt_text: str, workflow_path: str, server_address="127.0.0
             f.write(image_data)
         
         print(f"Image saved to: {final_image_path}\n\n")
-        return os.path.abspath(final_image_path)
+        return os.path.abspath(final_image_path), duration, seed_val
     else:
         print("Output image not found in history.\n\n")
-        return None
+        return None, None, None
+    
+def set_resize(workflow, node_id, width, height, allow_resize=False):
+    """
+    Set the resize value for the prompt.
+    Returns a string in the format 'widthxheight'.
+    """
+    try:
+        if (width > 1920 or height > 1080) and not allow_resize:
+            workflow[node_id]['inputs']['width'] = 1024
+            workflow[node_id]['inputs']['height'] = 1024
+        else:
+            workflow[node_id]['inputs']['width'] = width
+            workflow[node_id]['inputs']['height'] = height
+    except Exception as e:
+        print(f"Invalid width value: {width}")
+        print(f"Error: {e}")
+
+        
+
+
+def handle_resize(value):
+    """
+    Handle the resize value from the prompt.
+    Returns a tuple of (width, height) or None if invalid.
+    """
+    if value:
+        try:
+            width, height = map(int, value.split('x'))
+            return width, height
+        except ValueError:
+            print(f"Invalid resize value: {value}")
+            return None
+    return None
 
 def is_any_job_running(server_address="127.0.0.1:8001"):
     """
@@ -188,30 +245,91 @@ def get_pending_job_count(server_address="127.0.0.1:8001"):
         print(f"Error checking ComfyUI queue: {e}")
         return 0
     
-if __name__ == '__main__':
-    # Create a dummy image for testing if it doesn't exist
-    if not os.path.exists("input_image.png"):
-        try:
-            from PIL import Image
-            img = Image.new('RGB', (1024, 1024), color = 'red')
-            img.save('input_image.png')
-            print("Created a dummy input_image.png\n\n")
-        except ImportError:
-            print("Please create an 'input_image.png' file or install Pillow (pip install Pillow) to create one automatically.\n\n")
-            exit(1)
 
+def get_duration_from_history(prompt_history):
+    """Calculate generation duration from prompt history data."""
+    status_messages = prompt_history.get('status', {}).get('messages', [])
+    start_time = None
+    end_time = None
+    
+    for message in status_messages:
+        if message[0] == 'execution_start':
+            start_time = message[1]['timestamp']
+        elif message[0] == 'execution_success':
+            end_time = message[1]['timestamp']
+    
+    if start_time and end_time:
+        return (end_time - start_time) / 1000  # Convert ms to seconds
+    
+    return None
 
-    image_file = "input_image.png"
-    prompt = "A majestic cat sitting on a throne, cinematic lighting"
-    workflow_file = os.path.join("workflows", "flux_kontext_workflow.json")
+def update_prompt_text(workflow, text_node, prompt_text, neg_prompt_text_node=None, neg_prompt_text=None):
+    """Update the prompt text in the workflow."""
+    if text_node:
+        workflow[text_node]["inputs"]["text"] = prompt_text
+    
+    if neg_prompt_text and neg_prompt_text_node:
+        workflow[neg_prompt_text_node]["inputs"]["text"] = neg_prompt_text
 
-    if not os.path.exists(image_file):
-        print(f"Error: Input image '{image_file}' not found.")
-    elif not os.path.exists(workflow_file):
-        print(f"Error: Workflow '{workflow_file}' not found.")
-    else:
-        generated_image_path = generate_image(image_file, prompt, workflow_file)
-        if generated_image_path:
-            print(f"\\nSuccessfully generated image: {generated_image_path}")
+def update_sampling_params(workflow, ksampler_node, basicscheduler_node, flags):
+    """Update steps and cfg parameters in the workflow."""
+    if flags.get('steps') is not None:
+        if ksampler_node and "steps" in workflow[ksampler_node]["inputs"]:
+            workflow[ksampler_node]["inputs"]["steps"] = flags['steps']
+        elif basicscheduler_node and "steps" in workflow[basicscheduler_node]["inputs"]:
+            workflow[basicscheduler_node]["inputs"]["steps"] = flags['steps']
+    
+    if flags.get('cfg') is not None and ksampler_node and "cfg" in workflow[ksampler_node]["inputs"]:
+        workflow[ksampler_node]["inputs"]["cfg"] = flags['cfg']
+
+def update_seed(workflow, seed_node, upscaler_node, flags):
+    """Update seed values in the workflow. Returns the seed value used."""
+    seed_val = None
+    if not seed_node:
+        return seed_val
+
+    if "noise_seed" in workflow[seed_node]["inputs"]:
+        if flags.get('seed') is not None:
+            workflow[seed_node]["inputs"]["noise_seed"] = flags['seed']
+            seed_val = workflow[seed_node]["inputs"]["noise_seed"]
         else:
-            print("\\nFailed to generate image.")
+            workflow[seed_node]["inputs"]["noise_seed"] = random.randint(0, 2**53 - 1)
+            seed_val = workflow[seed_node]["inputs"]["noise_seed"]
+        
+        if upscaler_node and flags.get('seed') is not None:
+            workflow[upscaler_node]["inputs"]["seed"] = seed_val
+    
+    elif "seed" in workflow[seed_node]["inputs"]:
+        if flags.get('seed') is not None:
+            workflow[seed_node]["inputs"]["seed"] = flags['seed']
+            seed_val = workflow[seed_node]["inputs"]["seed"]
+        else:
+            workflow[seed_node]["inputs"]["seed"] = random.randint(0, 2**53 - 1)
+            seed_val = workflow[seed_node]["inputs"]["seed"]
+    
+    return seed_val
+
+def update_denoise(workflow, basicscheduler_node, upscaler_node, flags):
+    """Update denoise parameters in the workflow."""
+    if flags.get('seednoise') is not None and basicscheduler_node:
+        workflow[basicscheduler_node]["inputs"]["denoise"] = flags['seednoise']
+    
+    if upscaler_node and flags.get('upscale_noise') is not None:
+        workflow[upscaler_node]["inputs"]["denoise"] = flags['upscale_noise']
+
+def update_resolution(workflow, resize_resolution, allow_resize=False):
+    """Update resolution parameters in the workflow."""
+    if not resize_resolution:
+        return
+    
+    width, height = handle_resize(resize_resolution)
+    if not (width and height):
+        return
+
+    for node_type in ["EmptyHunyuanLatentVideo", "EmptySD3LatentImage", "EmptyLatentImage"]:
+        if node_type in str(workflow):
+            resize_node = find_node_by_class(workflow, node_type)
+            if resize_node:
+                set_resize(workflow=workflow, node_id=resize_node, 
+                         width=width, height=height, allow_resize=allow_resize)
+                break
