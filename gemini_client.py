@@ -24,7 +24,7 @@ Guidelines:
 
 {negative_prompt_instruction}
 
-Return only the improved prompt{negative_format_instruction}.
+Return only the improved prompt{negative_format_instruction} do not return any other comments or not related text beside the prompts!.
 """
 
 IMAGE_SYSTEM_PROMPT = """
@@ -171,9 +171,21 @@ class GeminiClient:
             negative_instruction = "7. IMPORTANT: Do NOT generate any negative prompt. Focus only on enhancing the positive prompt."
             format_instruction = ""
         
-        # Try each model sequentially
-        for model_info in self.available_text_models:
+        # Create a shuffled copy of available models to try randomly
+        import random
+        models_to_try = self.available_text_models.copy()
+        random.shuffle(models_to_try)
+        failed_models = set()
+        
+        # Try each model randomly, avoiding failed ones
+        for model_info in models_to_try:
             model_name = model_info["name"]
+            model_id = model_info["model_name"]
+            
+            # Skip if this model already failed in this loop
+            if model_id in failed_models:
+                continue
+                
             model = model_info["model"]
             
             # Format the system prompt with the target model name and negative prompt instructions
@@ -200,12 +212,14 @@ class GeminiClient:
                 if response and response.text and response.text.strip():
                     enhanced = response.text.strip()
                     logger.info(f"Successfully enhanced text prompt with {model_name}.")
-                    return enhanced
+                    return enhanced, model_info["model_name"]
                 else:
-                    logger.warning(f"{model_name} returned an empty response. Trying next model.")
+                    logger.warning(f"{model_name} returned an empty response. Marking as failed and trying next model.")
+                    failed_models.add(model_id)
                     
             except Exception as e:
-                logger.error(f"Failed to get response from {model_name}. Error: {e}. Trying next model...")
+                logger.error(f"Failed to get response from {model_name}. Error: {e}. Marking as failed and trying next model...")
+                failed_models.add(model_id)
                 continue
         
         logger.critical("All text models failed. Returning the original prompt.")
@@ -250,9 +264,21 @@ class GeminiClient:
             if image.mode != 'RGB':
                 image = image.convert('RGB')
             
-            # Try each vision model sequentially
-            for model_info in self.available_vision_models:
+            # Create a shuffled copy of available models to try randomly
+            import random
+            models_to_try = self.available_vision_models.copy()
+            random.shuffle(models_to_try)
+            failed_models = set()
+            
+            # Try each model randomly, avoiding failed ones
+            for model_info in models_to_try:
                 model_name = model_info["name"]
+                model_id = model_info["model_name"]
+                
+                # Skip if this model already failed in this loop
+                if model_id in failed_models:
+                    continue
+                    
                 model = model_info["model"]
                 
                 # Format the system prompt with the target model name and negative prompt instructions
@@ -280,10 +306,12 @@ class GeminiClient:
                         logger.info(f"Successfully improved prompt with {model_name}.")
                         return improved_prompt
                     else:
-                        logger.warning(f"{model_name} returned an empty response. Trying next model.")
+                        logger.warning(f"{model_name} returned an empty response. Marking as failed and trying next model.")
+                        failed_models.add(model_id)
                         
                 except Exception as e:
-                    logger.error(f"Failed to get response from {model_name}. Error: {e}. Trying next model...")
+                    logger.error(f"Failed to get response from {model_name}. Error: {e}. Marking as failed and trying next model...")
+                    failed_models.add(model_id)
                     continue
             
             logger.critical("All vision models failed. Returning the original prompt.")

@@ -204,7 +204,7 @@ def determine_model_name(prompt_text, flags, is_image_to_image=False):
         # Image-to-Image logic
         if 'upscale' in flags:
             return "WAN 2.1"
-        elif 'simpleup' in prompt_text.lower():
+        elif 'simpleup' in flags:
             return "AI Image Generator"
         elif 'kontext' in prompt_text.lower():
             return "Flux1-Kontext-dev"
@@ -268,7 +268,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if 'upscale' in flags:
         wf_path = config.WAN_2_1_UPSCALER_FILE_PATH
-    elif 'simpleup' in prompt_text.lower():
+    elif 'simpleup' in flags:
         wf_path = config.SIMPLE_UPSCALER_PATH
     elif 'kontext' in prompt_text.lower():
         wf_path = config.I2I_WORKFLOW_FILE_PATH
@@ -345,7 +345,7 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(ACTIVE_MSG)
         return
 
-    await check_pending_jobs(update)
+
 
     prompt_text = update.message.text
     if not prompt_text or prompt_text.startswith('/'):
@@ -521,6 +521,10 @@ def parse_prompt_flags(prompt_text):
     if '--grain' in prompt_text:
         flags['grain'] = True
         prompt_text = prompt_text.replace('--grain', '')
+
+    if '--simpleup' in prompt_text:
+        flags['simpleup'] = True
+        prompt_text = prompt_text.replace('--simpleup', '')
 
     upscale_match = re.search(r'--upscale\s+(.+)', prompt_text)     
     if upscale_match:
@@ -750,11 +754,11 @@ def parse_enhanced_prompt(enhanced_response, user_provided_neg_prompt=None):
     """
     if not enhanced_response:
         return enhanced_response, user_provided_neg_prompt
-    
-    # Check if the response contains "Negative prompt:"
-    if "Negative prompt:" in enhanced_response:
+
+    # Check if the response contains "negative prompt:"
+    if "negative prompt:" in enhanced_response.lower():
         # Split the response into positive and negative parts
-        parts = enhanced_response.split("Negative prompt:", 1)
+        parts = enhanced_response.lower().split("negative prompt:", 1)
         positive_prompt = parts[0].strip()
         ai_negative_prompt = parts[1].strip() if len(parts) > 1 else ""
         return positive_prompt, ai_negative_prompt
@@ -771,20 +775,21 @@ async def handle_magic_prompt_enhancement(update, context, prompt_text, negative
         wants_negative = negative_prompt_text is not None
         
         # Call the async function directly - don't use asyncio.to_thread for async functions
-        enhanced_response = await gemini.enhance_prompt(
+        enhanced_response, ai_model_name = await gemini.enhance_prompt(
             prompt_text, 
             image_path,  # None for text-only, path for multimodal
             model_name=model_name,
             user_negative_prompt=negative_prompt_text,
             wants_negative=wants_negative
         )
+        await check_pending_jobs(update)
         
         if enhanced_response and enhanced_response != prompt_text:
             # Parse the enhanced response
             enhanced_prompt, enhanced_neg_prompt = parse_enhanced_prompt(enhanced_response, negative_prompt_text)
             
             if enhanced_prompt != prompt_text:
-                prompt_text = enhanced_prompt
+                prompt_text = f'{enhanced_prompt}\n\nEnhancer: {ai_model_name}'
                 #await enhancement_msg.edit_text(f"🪄 **Enhanced prompt:** {prompt_text}", parse_mode=ParseMode.MARKDOWN)
             
             if wants_negative and enhanced_neg_prompt:
