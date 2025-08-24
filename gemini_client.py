@@ -223,7 +223,7 @@ class GeminiClient:
                 continue
         
         logger.critical("All text models failed. Returning the original prompt.")
-        return user_prompt
+        return user_prompt, None
 
     
     async def improve_prompt_multimodal(self, original_prompt: str, image_path: str, target_model: Optional[str] = None, user_negative_prompt: Optional[str] = None, wants_negative: bool = False) -> str:
@@ -304,7 +304,7 @@ class GeminiClient:
                     if response and response.text and response.text.strip():
                         improved_prompt = response.text.strip()
                         logger.info(f"Successfully improved prompt with {model_name}.")
-                        return improved_prompt
+                        return improved_prompt, model_info["model_name"]
                     else:
                         logger.warning(f"{model_name} returned an empty response. Marking as failed and trying next model.")
                         failed_models.add(model_id)
@@ -315,12 +315,12 @@ class GeminiClient:
                     continue
             
             logger.critical("All vision models failed. Returning the original prompt.")
-            return original_prompt
+            return original_prompt, None
                 
         except Exception as e:
             logger.error(f"Error preparing image for multimodal enhancement: {e}")
-            return original_prompt
-    
+            return original_prompt, None
+
     async def enhance_prompt(self, user_prompt: str, image_path: Optional[str] = None, model_name: Optional[str] = None, user_negative_prompt: Optional[str] = None, wants_negative: bool = False) -> str:
         """
         Main method to enhance prompts - uses multimodal if image provided, text-only otherwise.

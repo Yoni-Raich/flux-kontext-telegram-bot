@@ -1,0 +1,276 @@
+{
+  "63": {
+    "inputs": {
+      "conditioning": [
+        "93",
+        0
+      ],
+      "latent": [
+        "69",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "65": {
+    "inputs": {
+      "samples": [
+        "83",
+        0
+      ],
+      "vae": [
+        "68",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "67": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "68": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "69": {
+    "inputs": {
+      "pixels": [
+        "92",
+        0
+      ],
+      "vae": [
+        "68",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "74": {
+    "inputs": {
+      "direction": "right",
+      "match_image_size": true,
+      "spacing_width": 0,
+      "spacing_color": "white",
+      "image1": [
+        "84",
+        0
+      ]
+    },
+    "class_type": "ImageStitch",
+    "_meta": {
+      "title": "Image Stitch"
+    }
+  },
+  "75": {
+    "inputs": {
+      "rgthree_comparer": {
+        "images": [
+          {
+            "name": "A",
+            "selected": true,
+            "url": "/api/view?filename=rgthree.compare._temp_pepuy_00051_.png&type=temp&subfolder=&rand=0.3587616125529274"
+          },
+          {
+            "name": "B",
+            "selected": true,
+            "url": "/api/view?filename=rgthree.compare._temp_pepuy_00052_.png&type=temp&subfolder=&rand=0.6162255736066523"
+          }
+        ]
+      },
+      "image_a": [
+        "92",
+        0
+      ],
+      "image_b": [
+        "65",
+        0
+      ]
+    },
+    "class_type": "Image Comparer (rgthree)",
+    "_meta": {
+      "title": "Image Comparer (rgthree)"
+    }
+  },
+  "77": {
+    "inputs": {
+      "images": [
+        "92",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "80": {
+    "inputs": {
+      "boolean": true,
+      "on_true": [
+        "67",
+        0
+      ],
+      "on_false": [
+        "69",
+        0
+      ]
+    },
+    "class_type": "Switch latent [Crystools]",
+    "_meta": {
+      "title": "🪛 Switch latent"
+    }
+  },
+  "81": {
+    "inputs": {
+      "unet_name": "Qwen_Image_Edit-Q4_K_S.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Unet Loader (GGUF)"
+    }
+  },
+  "83": {
+    "inputs": {
+      "seed": 962164664153693,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 0.85,
+      "model": [
+        "88",
+        0
+      ],
+      "positive": [
+        "63",
+        0
+      ],
+      "negative": [
+        "63",
+        0
+      ],
+      "latent_image": [
+        "80",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "84": {
+    "inputs": {
+      "image": "537183297_10235537670996709_866313929223589380_n (1).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "86": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "65",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "88": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": true,
+        "lora": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+        "strength": 1
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "81",
+        0
+      ],
+      "clip": [
+        "94",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)"
+    }
+  },
+  "92": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "image": [
+        "74",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Scale Image to Total Pixels"
+    }
+  },
+  "93": {
+    "inputs": {
+      "prompt": " a woman wearing this bracelet on her wrist, the arm should be very clear while the background is heavily blurred, high quality closeup portrait 8k",
+      "clip": [
+        "88",
+        1
+      ],
+      "vae": [
+        "68",
+        0
+      ],
+      "image": [
+        "92",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEdit",
+    "_meta": {
+      "title": "TextEncodeQwenImageEdit (Positive)"
+    }
+  },
+  "94": {
+    "inputs": {
+      "clip_name": "Qwen2.5-VL-7B-Instruct-UD-Q5_K_S.gguf",
+      "type": "qwen_image"
+    },
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "CLIPLoader (GGUF)"
+    }
+  }
+}

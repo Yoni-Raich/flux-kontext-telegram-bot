@@ -129,9 +129,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Available Flags:*\n"
         "*\\-\\-steps:*\n Default is 20\\. Controls iteration steps\\.\n\n"
         "*\\-\\-cfg:*\n Default is 1\\.0\\. Controls Classifier\\-Free Guidance scale\\.\n\n"
-        "*\\-\\-upscale:*\n Will upscale the image x2 Using WAN2\\.1 model \\(BETA, currently slightly changes the picture, better to also set a low denoise for the seed 0\\.02\\)\\.\n\n"
+        "*\\-\\-upscale:*\n Will upscale the image x2 Using QWEN model\nFor WAN upscaler add the word wan21 in ur prompt\\(wan upscaler is BETA, currently slightly changes the picture, better to also set a low denoise for the seed 0\\.02\\)\\.\n\n"
         "*\\-\\-seednoise:*\n Sets a specific seed noise for reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"
-        "*\\-\\-upnoise:*\n Sets a specific up noise for upscale reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"
+        "*\\-\\-upnoise:*\n Sets a specific up noise for upscale reproducibility \\(0\\.0\\-1\\.0\\)\\. \\(Only for WAN Upscaler\\)\n\n"
         "*Upscale Example:*\n"
         "Send a picture and in the caption either:"
         "```\n"
@@ -141,21 +141,24 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "\\-\\-upscale A photo realistic portrait of a blonde hair nordic woman"
         "```\n\n"
         "*__Text To Image Generation:__*\n"
-        "Simply send me a prompt\\. The default model is WAN2\\.1\\.\n"
+        "Simply send me a prompt\\. The default model is WAN2\\.1\n"
         "*Example:*\n"
         "```\n"
         "A photo realistic portrait of a blonde hair nordic woman"
         "```\n\n"
         "*Available Flags:*\n"
-        "*\\-\\-steps:*\n Default is 20 for Krea and Flux models, 10 for WAN2\\.1\\. Controls iteration steps\\.\n\n"
+        "*\\-\\-steps:*\n Default is 20 for Krea and Flux models, 10 for WAN2\\.1\\ 4 and 8 for QWEN. Controls iteration steps\\.\n\n"
         "*\\-\\-cfg:*\n Default is 1\\.0\\. Controls Classifier\\-Free Guidance scale\\.\n\n"
         "*\\-\\-res:*\n Default resolution is 1024x1024, maximum resolution is 1920x1080\n\n"
         "*\\-\\-neg:*\n Controls the negative prompt for image generation\\. \\(Only for Wan model\\)\n\n"
         "*\\-\\-seed:*\n Sets a specific seed for reproducibility\\.\n\n"
-        "*\\-\\-seednoise:*\n Sets a specific seed noise for reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"
-        "*\\-\\-upnoise:*\n Sets a specific up noise for upscale reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"
-        "*Using Krea Model:*\n"
-        "Add 'kreawf' before your prompt\\:\n"
+        "*\\-\\-seednoise:*\n Sets a specific seed noise for reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"        
+        "*Using Other Models:*\n"
+        "Add 'qwen4' or 'qwen8' before your prompt to use Qwen model\\:\n"
+        "```\n"
+        "qwen4 A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "Add 'kreawf' before your prompt to use Krea model\\:\n"
         "```\n"
         "kreawf A photo realistic portrait of a blonde hair nordic woman"
         "```\n\n"
@@ -203,11 +206,15 @@ def determine_model_name(prompt_text, flags, is_image_to_image=False):
     if is_image_to_image:
         # Image-to-Image logic
         if 'upscale' in flags:
-            return "WAN 2.1"
+            if prompt_text and 'wan21' in prompt_text.lower():
+                return "WAN 2.1 Upscaler"
+            return "QWEN"
         elif 'simpleup' in flags:
             return "AI Image Generator"
         elif 'kontext' in prompt_text.lower():
             return "Flux1-Kontext-dev"
+        elif 'qwen4' in prompt_text.lower():
+            return "QWEN"
         else:
             return "Flux1-Kontext-dev"  # Default for I2I
     else:
@@ -238,9 +245,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "Please send an image with a caption. The caption will be used as the prompt."
         )
-        return
-    
-    await check_pending_jobs(update)
+        return        
 
     prompt_text = update.message.caption
     photo_file = await update.message.photo[-1].get_file()
@@ -267,11 +272,16 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             flags['steps'] = config.MAX_STEPS
 
     if 'upscale' in flags:
-        wf_path = config.WAN_2_1_UPSCALER_FILE_PATH
+        if prompt_text and 'wan21' in prompt_text.lower():
+            wf_path = config.WAN_2_1_UPSCALER_FILE_PATH
+        else:
+            wf_path = config.QWEN_UPSCALER_FILE_PATH
     elif 'simpleup' in flags:
         wf_path = config.SIMPLE_UPSCALER_PATH
     elif 'kontext' in prompt_text.lower():
         wf_path = config.I2I_WORKFLOW_FILE_PATH
+    elif 'qwen4' in prompt_text.lower():
+        wf_path = config.QWEN_4_STEP_I2I_FILE_PATH
     else:
         wf_path = config.I2I_WORKFLOW_FILE_PATH
 
@@ -283,6 +293,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎨 Image received. Processing your request, this might take a moment..."
     )
 
+    prompt_text = re.sub(r'\b(wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
     async def process_and_respond(): 
         nonlocal prompt_text, neg_prompt_text 
         # Check if Magic Prompt is enabled for this user - using multimodal enhancement
@@ -296,7 +307,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 enhancement_msg, model_name, flags, wf_path, workflow_name, input_image_path
             ))
             return  # Exit here - enhancement will handle the rest
-            
+        
+        await check_pending_jobs(update)    
         try:
             generated_image_path, duration_seconds, seed = await asyncio.to_thread(
             generate_image,
@@ -343,9 +355,7 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """
     if not is_active_hours():
         await update.message.reply_text(ACTIVE_MSG)
-        return
-
-
+        return        
 
     prompt_text = update.message.text
     if not prompt_text or prompt_text.startswith('/'):
@@ -374,14 +384,18 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif 'kreasmp' in prompt_text.lower():
         wf_path = config.KREA_T2I_SIMPLIFIED_FILE_PATH
     elif 'kontext' in prompt_text.lower():
-        wf_path = config.T2I_WORKFLOW_FILE_PATH        
+        wf_path = config.T2I_WORKFLOW_FILE_PATH
+    elif 'qwen4' in prompt_text.lower():
+        wf_path = config.QWEN_4_STEP_T2I_FILE_PATH
+    elif 'qwen8' in prompt_text.lower():
+        wf_path = config.QWEN_8_STEP_T2I_FILE_PATH
     else:
         if 'grain' in flags:
             wf_path = config.WAN_T2I_WORKFLOW_FILE_PATH
         else:             
             wf_path = config.WAN_T2I_WORKFLOW__NOGRAIN_FILE_PATH
 
-    prompt_text = re.sub(r'\b(kreawf|kreasmp|wan)\b', '', prompt_text, flags=re.IGNORECASE).strip()    
+    prompt_text = re.sub(r'\b(kreawf|kreasmp|wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
     logger.info(f'wf path: {wf_path}\n\n')
     workflow_name = wf_path.split('/')[-1].split('.')[0]
 
@@ -399,6 +413,7 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
             ))
             return  # Exit here - enhancement will handle the rest
         
+        await check_pending_jobs(update)
         # Record start time
         start_time = datetime.now()
         await handle_resize(value=flags.get('resize')  if flags.get('resize') else None, update=update)
@@ -647,21 +662,11 @@ async def send_image_with_logging(
     seed=None,
     duration_seconds=None,
     workflow_name=None,
-    nogroup=False  # Add the nogroup parameter
+    nogroup=False,
+    ai_model_name=None  # Add AI model name parameter
 ):
     """
     Sends the generated image to both the user and the logging group.
-    
-    Args:
-        update: The update object from telegram
-        image_path: Path to the generated image
-        prompt_text: The original prompt text
-        workflow_type: The type of generation (Text-to-Image or Image-to-Image)
-        cfg_value: CFG value used
-        steps_value: Steps value used
-        duration_seconds: Time taken to generate the image in seconds
-        workflow_name: Name of the workflow used
-        nogroup: If True, skip sending to logging group
     """
     # Format duration string
     duration_str = ""
@@ -673,11 +678,14 @@ async def send_image_with_logging(
         else:
             duration_str = f"\n⏱️ Time duration: {duration_seconds:.1f}s"
 
-    # Prepare the caption with more details
+    # Add AI model info if available
+    ai_model_str = f"\n🤖 Enhanced by: {ai_model_name}" if ai_model_name else ""
 
+    # Prepare the caption with more details
     user_caption = (        
         f"Generation Type: {workflow_type}\n\n"
-        f"Prompt: {prompt_text}\n\n"
+        f"Prompt: {prompt_text}\n"
+        f"{ai_model_str}\n\n"
         f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else '1.0'}\n"
         f"Steps: {flags.get('steps')}\n"
         f"Seed: {flags.get('seed') if flags.get('seed') is not None else seed}\n"
@@ -689,7 +697,8 @@ async def send_image_with_logging(
         f"Image generated by: @{update.effective_user.username or 'Unknown'}\n"
         f"User ID: {update.effective_user.id}\n"
         f"Generation Type: {workflow_type}\n\n"
-        f"Prompt: {prompt_text}\n\n"
+        f"Prompt: {prompt_text}\n"
+        f"{ai_model_str}\n\n"
         f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else '1.0'}\n"
         f"Steps: {flags.get('steps')}\n"
         f"Seed: {flags.get('seed') if flags.get('seed') is not None else seed}\n"
@@ -770,6 +779,8 @@ def parse_enhanced_prompt(enhanced_response, user_provided_neg_prompt=None):
 async def handle_magic_prompt_enhancement(update, context, prompt_text, negative_prompt_text, 
                                         enhancement_msg, model_name, flags, wf_path, workflow_name, image_path):
     """Handle Magic Prompt enhancement in the background without blocking the bot."""
+    ai_model_name = None  # Initialize to track the enhancer model
+    
     try:
         gemini = get_gemini_client()
         wants_negative = negative_prompt_text is not None
@@ -782,15 +793,18 @@ async def handle_magic_prompt_enhancement(update, context, prompt_text, negative
             user_negative_prompt=negative_prompt_text,
             wants_negative=wants_negative
         )
-        await check_pending_jobs(update)
+        if context.user_data.get('magic_prompt', True):
+            await check_pending_jobs(update)
         
         if enhanced_response and enhanced_response != prompt_text:
             # Parse the enhanced response
             enhanced_prompt, enhanced_neg_prompt = parse_enhanced_prompt(enhanced_response, negative_prompt_text)
             
             if enhanced_prompt != prompt_text:
-                prompt_text = f'{enhanced_prompt}\n\nEnhancer: {ai_model_name}'
-                #await enhancement_msg.edit_text(f"🪄 **Enhanced prompt:** {prompt_text}", parse_mode=ParseMode.MARKDOWN)
+                # Use clean enhanced prompt for ComfyUI
+                prompt_text = enhanced_prompt
+                # Show enhancement message to user
+                #await enhancement_msg.edit_text(f"🪄 **Enhanced prompt:** {enhanced_prompt}\n\n*Enhanced by: {ai_model_name}*", parse_mode=ParseMode.MARKDOWN)
             
             if wants_negative and enhanced_neg_prompt:
                 negative_prompt_text = enhanced_neg_prompt
@@ -806,11 +820,11 @@ async def handle_magic_prompt_enhancement(update, context, prompt_text, negative
         logger.error(f"Error enhancing prompt: {e}")
         await enhancement_msg.edit_text("⚠️ Using original prompt due to enhancement error.")
     
-    # Now start the actual image generation with enhanced (or original) prompt
-    await generate_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_path)
+    # Now start the actual image generation with enhanced (or original) prompt and AI model info
+    await generate_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_path, ai_model_name)
 
 
-async def generate_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_path):
+async def generate_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_path, ai_model_name=None):
     """Handle the actual image generation."""
     start_time = datetime.now()
     
@@ -862,7 +876,8 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
                 seed,
                 duration_seconds,
                 workflow_name,
-                nogroup=flags.get('nogroup', False)
+                nogroup=flags.get('nogroup', False),
+                ai_model_name=ai_model_name  # Pass the AI model name to the logging function
             )
         else:
             raise FileNotFoundError("The generated image file was not found.")

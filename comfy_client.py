@@ -1,3 +1,4 @@
+import time
 import websocket
 import uuid
 import json
@@ -71,7 +72,7 @@ def generate_image(prompt_text: str,
         workflow = json.load(f)
 
     # Find the correct nodes dynamically
-    text_node = find_node_by_class(workflow, "CLIPTextEncode")
+    text_node = find_node_by_class(workflow, "CLIPTextEncode") or find_node_by_class(workflow, "TextEncodeQwenImageEdit")
     if neg_prompt_text:
         neg_prompt_text_node = find_node_by_class(workflow, "CLIPTextEncode", neg_text=True)
     ksampler_node = find_node_by_class(workflow, "KSampler")
@@ -128,7 +129,7 @@ def generate_image(prompt_text: str,
             out = ws.recv()
             if isinstance(out, str):
                 message = json.loads(out)
-                if (message.get('type') == 'executing' and message.get('data', {}).get('node') is None) or (message.get('type') == 'executed' and message.get('data', {}).get('prompt_id') == prompt_id):
+                if (message.get('type') == 'executing' and message.get('data', {}).get('node') is None) or (message.get('type') == 'executed' and message.get('data', {}).get('prompt_id') == prompt_id and message.get('data', {}).get('node') is None):
                     if message.get('data', {}).get('prompt_id') == prompt_id:
                         print("Execution finished.\n\n")
                         break # Execution is done for our prompt
@@ -138,14 +139,20 @@ def generate_image(prompt_text: str,
     finally:
         ws.close()
 
-    # 5. Retrieve the output image from history
+    # 5. Retrieve the output image from history    
     history_url = f"http://{server_address}/history/{prompt_id}"
-    with urllib.request.urlopen(history_url) as response:
-        history = json.loads(response.read())
+    for attempt in range(5):
+        with urllib.request.urlopen(history_url) as response:
+            history = json.loads(response.read())
+        if history and prompt_id in history:
+            break
+        else:
+            print('History not found, retrying...')
+            time.sleep(1)
 
     if prompt_id not in history:
         print("Prompt ID not found in history.\n\n")
-        return None
+        return None, None, None
 
     prompt_history = history[prompt_id]
 
@@ -266,8 +273,14 @@ def get_duration_from_history(prompt_history):
 def update_prompt_text(workflow, text_node, prompt_text, neg_prompt_text_node=None, neg_prompt_text=None):
     """Update the prompt text in the workflow."""
     if text_node:
-        workflow[text_node]["inputs"]["text"] = prompt_text
-    
+        # Check if the node has 'text' or 'prompt' input field
+        if "text" in workflow[text_node]["inputs"]:
+            workflow[text_node]["inputs"]["text"] = prompt_text
+        elif "prompt" in workflow[text_node]["inputs"]:
+            workflow[text_node]["inputs"]["prompt"] = prompt_text
+        else:
+            print(f"Warning: Node {text_node} doesn't have 'text' or 'prompt' input field")
+     
     if neg_prompt_text and neg_prompt_text_node:
         workflow[neg_prompt_text_node]["inputs"]["text"] = neg_prompt_text
 
