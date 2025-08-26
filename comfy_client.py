@@ -80,6 +80,10 @@ def generate_image(prompt_text: str,
     seed_node = find_node_by_class(workflow, "RandomNoise") or find_node_by_class(workflow, "KSampler")
     save_node = find_node_by_class(workflow, "SaveImage")
     upscaler_node = find_node_by_class(workflow, "UltimateSDUpscale")
+    denoise_node = find_node_by_class(workflow, "BasicScheduler") or find_node_by_class(workflow, "KSampler")
+
+    if flags.get('chngsmp'):
+        update_sampler(workflow, ksampler_node)
 
     # Update prompt text
     update_prompt_text(workflow, text_node, prompt_text, 
@@ -92,7 +96,7 @@ def generate_image(prompt_text: str,
     seed_val = update_seed(workflow, seed_node, upscaler_node, flags or {})
 
     # Update denoise parameters
-    update_denoise(workflow, basicscheduler_node, upscaler_node, flags or {})
+    update_denoise(workflow, denoise_node, upscaler_node, flags or {})
 
     # Update resolution if provided
     update_resolution(workflow, resize_resolution, allow_resize)
@@ -187,6 +191,18 @@ def generate_image(prompt_text: str,
         print("Output image not found in history.\n\n")
         return None, None, None
     
+
+def update_sampler(workflow, node_id):
+    """
+    Update the sampler type for the given node in the workflow.
+    """
+    if node_id in workflow:
+        workflow[node_id]['inputs']['sampler_name'] = 'dpmpp_2m'
+        workflow[node_id]['inputs']['scheduler'] = 'karras'
+    else:
+        print(f"Node ID {node_id} not found in workflow.")
+
+
 def set_resize(workflow, node_id, width, height, allow_resize=False):
     """
     Set the resize value for the prompt.
@@ -322,11 +338,11 @@ def update_seed(workflow, seed_node, upscaler_node, flags):
     
     return seed_val
 
-def update_denoise(workflow, basicscheduler_node, upscaler_node, flags):
+def update_denoise(workflow, denoise_node, upscaler_node, flags):
     """Update denoise parameters in the workflow."""
-    if flags.get('seednoise') is not None and basicscheduler_node:
-        workflow[basicscheduler_node]["inputs"]["denoise"] = flags['seednoise']
-    
+    if flags.get('seednoise') is not None and denoise_node:
+        workflow[denoise_node]["inputs"]["denoise"] = flags['seednoise']
+
     if upscaler_node and flags.get('upscale_noise') is not None:
         workflow[upscaler_node]["inputs"]["denoise"] = flags['upscale_noise']
 
