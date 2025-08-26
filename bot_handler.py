@@ -147,7 +147,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "A photo realistic portrait of a blonde hair nordic woman"
         "```\n\n"
         "*Available Flags:*\n"
-        "*\\-\\-steps:*\n Default is 20 for Krea and Flux models, 10 for WAN2\\.1\\ 4 and 8 for QWEN. Controls iteration steps\\.\n\n"
+        "*\\-\\-steps:*\n Default is 20 for Krea and Flux models, 10 for WAN2\\.1\\. 4 and 8 for QWEN\\(no need to increase on these flows\\)\\. Controls iteration steps\\.\n\n"
         "*\\-\\-cfg:*\n Default is 1\\.0\\. Controls Classifier\\-Free Guidance scale\\.\n\n"
         "*\\-\\-res:*\n Default resolution is 1024x1024, maximum resolution is 1920x1080\n\n"
         "*\\-\\-neg:*\n Controls the negative prompt for image generation\\. \\(Only for Wan model\\)\n\n"
@@ -282,6 +282,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wf_path = config.I2I_WORKFLOW_FILE_PATH
     elif 'qwen4' in prompt_text.lower():
         wf_path = config.QWEN_4_STEP_I2I_FILE_PATH
+    elif 'qwen8' in prompt_text.lower():
+        wf_path = config.QWEN_8_STEP_I2I_FILE_PATH
     else:
         wf_path = config.I2I_WORKFLOW_FILE_PATH
 
@@ -293,7 +295,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎨 Image received. Processing your request, this might take a moment..."
     )
 
-    prompt_text = re.sub(r'\b(wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+    if prompt_text:
+        prompt_text = re.sub(r'\b(wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
     async def process_and_respond(): 
         nonlocal prompt_text, neg_prompt_text 
         # Check if Magic Prompt is enabled for this user - using multimodal enhancement
@@ -317,6 +320,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             workflow_path=wf_path,
             server_address=config.COMFYUI_SERVER_ADDRESS,
             flags=flags,
+            resize_resolution=flags.get('resize')  if flags.get('resize') else None,
+            allow_resize=update.effective_user.id == config.MY_USER_ID,
             fast_film_grain=flags.get('fast_film_grain', False)  # Use the flag if provided
             )
 
@@ -347,6 +352,10 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 os.remove(input_image_path)
 
     asyncio.create_task(process_and_respond())
+
+
+
+
 
 @authorized
 async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -545,6 +554,10 @@ def parse_prompt_flags(prompt_text):
     if upscale_match:
         flags['upscale'] = True
         prompt_text = prompt_text.replace('--upscale', '')
+        
+    if re.search(r'--chngsmp\b', prompt_text):
+        flags['chngsmp'] = True
+        prompt_text = re.sub(r'--chngsmp\b', '', prompt_text)
     elif 'upscale' in prompt_text.lower():
         flags['upscale'] = True
         prompt_text = prompt_text.replace('--upscale', '')
