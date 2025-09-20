@@ -154,6 +154,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*\\-\\-seed:*\n Sets a specific seed for reproducibility\\.\n\n"
         "*\\-\\-seednoise:*\n Sets a specific seed noise for reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"        
         "*Using Other Models:*\n"
+        "Add 'wan22dslr4' before your prompt to use WAN 2\\.2 4\\-Steps DSLR Lora model\\:\n"
+        "```\n"
+        "wan22dslr4 A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
         "Add 'qwen4' or 'qwen8' before your prompt to use Qwen model\\:\n"
         "```\n"
         "qwen4 A photo realistic portrait of a blonde hair nordic woman"
@@ -237,6 +241,10 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handles incoming images with captions.
     """
+    # Check if this is part of a media group (multiple images)
+    if update.message.media_group_id:
+        return await handle_media_group(update, context)
+    
     if not is_active_hours():
         await update.message.reply_text(ACTIVE_MSG)
         return
@@ -398,13 +406,15 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
         wf_path = config.QWEN_4_STEP_T2I_FILE_PATH
     elif 'qwen8' in prompt_text.lower():
         wf_path = config.QWEN_8_STEP_T2I_FILE_PATH
+    elif 'wan22dslr4' in prompt_text.lower():
+        wf_path = config.WAN_2_2_4STEPS_T2I_DSLR_LORA_FILE_PATH
     else:
         if 'grain' in flags:
             wf_path = config.WAN_T2I_WORKFLOW_FILE_PATH
         else:             
             wf_path = config.WAN_T2I_WORKFLOW__NOGRAIN_FILE_PATH
 
-    prompt_text = re.sub(r'\b(kreawf|kreasmp|wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+    prompt_text = re.sub(r'\b(kreawf|kreasmp|wan21|wan22dslr4|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
     logger.info(f'wf path: {wf_path}\n\n')
     workflow_name = wf_path.split('/')[-1].split('.')[0]
 
@@ -681,6 +691,13 @@ async def send_image_with_logging(
     """
     Sends the generated image to both the user and the logging group.
     """
+    # Telegram's photo size limit (10MB)
+    PHOTO_SIZE_LIMIT = 10485760  # 10MB in bytes
+    
+    # Check file size
+    file_size = os.path.getsize(image_path)
+    send_as_document = file_size > PHOTO_SIZE_LIMIT
+    
     # Format duration string
     duration_str = ""
     if duration_seconds:
@@ -693,6 +710,9 @@ async def send_image_with_logging(
 
     # Add AI model info if available
     ai_model_str = f"\n🤖 Enhanced by: {ai_model_name}" if ai_model_name else ""
+    
+    # Add file size info if sending as document
+    file_size_str = f"\n📁 File size: {file_size / 1024 / 1024:.1f}MB (sent as document)" if send_as_document else ""
 
     # Prepare the caption with more details
     user_caption = (        
@@ -702,7 +722,8 @@ async def send_image_with_logging(
         f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else '1.0'}\n"
         f"Steps: {flags.get('steps')}\n"
         f"Seed: {flags.get('seed') if flags.get('seed') is not None else seed}\n"
-        f"{duration_str}\n\n"
+        f"{duration_str}"
+        f"{file_size_str}\n\n"
         f"Workflow: {workflow_name}"
     )
 
@@ -715,52 +736,116 @@ async def send_image_with_logging(
         f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else '1.0'}\n"
         f"Steps: {flags.get('steps')}\n"
         f"Seed: {flags.get('seed') if flags.get('seed') is not None else seed}\n"
-        f"{duration_str}\n\n"
+        f"{duration_str}"
+        f"{file_size_str}\n\n"
         f"Workflow: {workflow_name}"
     )
 
     # Send to user
-    if len(user_caption) <= 1024:
-        # Caption fits, send with image
-        await update.message.reply_photo(
-            photo=open(image_path, 'rb'),
-            caption=user_caption
-        )
-    else:
-        # Caption too long, send image without caption, then send text
-        await update.message.reply_photo(
-            photo=open(image_path, 'rb')
-        )
-        # Split and send the caption as text messages
-        text_parts = split_long_text(user_caption, max_length=4096)
-        for part in text_parts:
-            await update.message.reply_text(part)
+    try:
+        if send_as_document:
+            # Send as document if file is too large
+            if len(user_caption) <= 1024:
+                await update.message.reply_document(
+                    document=open(image_path, 'rb'),
+                    caption=user_caption,
+                    filename=f"generated_image_{workflow_name}.png"
+                )
+            else:
+                await update.message.reply_document(
+                    document=open(image_path, 'rb'),
+                    filename=f"generated_image_{workflow_name}.png"
+                )
+                # Split and send the caption as text messages
+                text_parts = split_long_text(user_caption, max_length=4096)
+                for part in text_parts:
+                    await update.message.reply_text(part)
+        else:
+            # Send as photo if file size is acceptable
+            if len(user_caption) <= 1024:
+                await update.message.reply_photo(
+                    photo=open(image_path, 'rb'),
+                    caption=user_caption
+                )
+            else:
+                await update.message.reply_photo(
+                    photo=open(image_path, 'rb')
+                )
+                # Split and send the caption as text messages
+                text_parts = split_long_text(user_caption, max_length=4096)
+                for part in text_parts:
+                    await update.message.reply_text(part)
+    except Exception as e:
+        logger.error(f"Failed to send image to user: {e}")
+        # Fallback: try sending as document if photo failed
+        if not send_as_document:
+            try:
+                await update.message.reply_document(
+                    document=open(image_path, 'rb'),
+                    caption="Image sent as document due to size constraints.",
+                    filename=f"generated_image_{workflow_name}.png"
+                )
+            except Exception as e2:
+                logger.error(f"Failed to send image as document: {e2}")
 
     # Send to logging group if configured and nogroup flag is not set
     if not nogroup and hasattr(config, 'LOGGING_GROUP_ID') and config.LOGGING_GROUP_ID:
         try:
-            if len(group_caption) <= 1024:
-                # Caption fits, send with image
-                await update.get_bot().send_photo(
-                    chat_id=config.LOGGING_GROUP_ID,
-                    photo=open(image_path, 'rb'),
-                    caption=group_caption
-                )
-            else:
-                # Caption too long, send image without caption, then send text
-                await update.get_bot().send_photo(
-                    chat_id=config.LOGGING_GROUP_ID,
-                    photo=open(image_path, 'rb')
-                )
-                # Split and send the caption as text messages
-                text_parts = split_long_text(group_caption, max_length=4096)
-                for part in text_parts:
-                    await update.get_bot().send_message(
+            if send_as_document:
+                # Send as document if file is too large
+                if len(group_caption) <= 1024:
+                    await update.get_bot().send_document(
                         chat_id=config.LOGGING_GROUP_ID,
-                        text=part
+                        document=open(image_path, 'rb'),
+                        caption=group_caption,
+                        filename=f"generated_image_{workflow_name}.png"
                     )
+                else:
+                    await update.get_bot().send_document(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        document=open(image_path, 'rb'),
+                        filename=f"generated_image_{workflow_name}.png"
+                    )
+                    # Split and send the caption as text messages
+                    text_parts = split_long_text(group_caption, max_length=4096)
+                    for part in text_parts:
+                        await update.get_bot().send_message(
+                            chat_id=config.LOGGING_GROUP_ID,
+                            text=part
+                        )
+            else:
+                # Send as photo if file size is acceptable
+                if len(group_caption) <= 1024:
+                    await update.get_bot().send_photo(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        photo=open(image_path, 'rb'),
+                        caption=group_caption
+                    )
+                else:
+                    await update.get_bot().send_photo(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        photo=open(image_path, 'rb')
+                    )
+                    # Split and send the caption as text messages
+                    text_parts = split_long_text(group_caption, max_length=4096)
+                    for part in text_parts:
+                        await update.get_bot().send_message(
+                            chat_id=config.LOGGING_GROUP_ID,
+                            text=part
+                        )
         except Exception as e:
-            logger.error(f"Failed to send image to logging group: {e}\n\n")
+            logger.error(f"Failed to send image to logging group: {e}")
+            # Fallback: try sending as document if photo failed
+            if not send_as_document:
+                try:
+                    await update.get_bot().send_document(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        document=open(image_path, 'rb'),
+                        caption="Image sent as document due to size constraints.",
+                        filename=f"generated_image_{workflow_name}.png"
+                    )
+                except Exception as e2:
+                    logger.error(f"Failed to send image as document to logging group: {e2}")
 
 
 def parse_enhanced_prompt(enhanced_response, user_provided_neg_prompt=None):
@@ -790,34 +875,33 @@ def parse_enhanced_prompt(enhanced_response, user_provided_neg_prompt=None):
     
 
 async def handle_magic_prompt_enhancement(update, context, prompt_text, negative_prompt_text, 
-                                        enhancement_msg, model_name, flags, wf_path, workflow_name, image_path):
+                                        enhancement_msg, model_name, flags, wf_path, workflow_name, image_path, image_paths=None):
     """Handle Magic Prompt enhancement in the background without blocking the bot."""
-    ai_model_name = None  # Initialize to track the enhancer model
+    ai_model_name = None
     
     try:
         gemini = get_gemini_client()
         wants_negative = negative_prompt_text is not None
         
-        # Call the async function directly - don't use asyncio.to_thread for async functions
+        # For multi-image, use the first image for enhancement
+        enhancement_image_path = image_path if image_path else (image_paths[0] if image_paths else None)
+        
         enhanced_response, ai_model_name = await gemini.enhance_prompt(
             prompt_text, 
-            image_path,  # None for text-only, path for multimodal
+            enhancement_image_path,
             model_name=model_name,
             user_negative_prompt=negative_prompt_text,
             wants_negative=wants_negative
         )
+        
         if context.user_data.get('magic_prompt', True):
             await check_pending_jobs(update)
         
         if enhanced_response and enhanced_response != prompt_text:
-            # Parse the enhanced response
             enhanced_prompt, enhanced_neg_prompt = parse_enhanced_prompt(enhanced_response, negative_prompt_text)
             
             if enhanced_prompt != prompt_text:
-                # Use clean enhanced prompt for ComfyUI
                 prompt_text = enhanced_prompt
-                # Show enhancement message to user
-                #await enhancement_msg.edit_text(f"🪄 **Enhanced prompt:** {enhanced_prompt}\n\n*Enhanced by: {ai_model_name}*", parse_mode=ParseMode.MARKDOWN)
             
             if wants_negative and enhanced_neg_prompt:
                 negative_prompt_text = enhanced_neg_prompt
@@ -833,8 +917,11 @@ async def handle_magic_prompt_enhancement(update, context, prompt_text, negative
         logger.error(f"Error enhancing prompt: {e}")
         await enhancement_msg.edit_text("⚠️ Using original prompt due to enhancement error.")
     
-    # Now start the actual image generation with enhanced (or original) prompt and AI model info
-    await generate_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_path, ai_model_name)
+    # Choose the appropriate generation function
+    if image_paths:
+        await generate_multi_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_paths, ai_model_name)
+    else:
+        await generate_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_path, ai_model_name)
 
 
 async def generate_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_path, ai_model_name=None):
@@ -853,7 +940,9 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
                 workflow_path=wf_path,
                 server_address=config.COMFYUI_SERVER_ADDRESS,
                 flags=flags,
-                fast_film_grain=flags.get('fast_film_grain', False)
+                fast_film_grain=flags.get('fast_film_grain', False),
+                resize_resolution=flags.get('resize') if flags.get('resize') else None,
+                allow_resize=update.effective_user.id == config.MY_USER_ID
             )
         else:  # Text-to-image
             generated_image_path, duration_seconds, seed = await asyncio.to_thread(
@@ -864,7 +953,7 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
                 workflow_path=wf_path,
                 server_address=config.COMFYUI_SERVER_ADDRESS,
                 flags=flags,
-                resize_resolution=flags.get('resize') if flags.get('resize') else None,
+                resize_resolution=flags.get('resize')  if flags.get('resize') else None,
                 allow_resize=update.effective_user.id == config.MY_USER_ID
             )
         
@@ -904,3 +993,221 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
         # Clean up the downloaded image for image-to-image
         if image_path and os.path.exists(image_path):
             os.remove(image_path)
+
+async def handle_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handles media groups (multiple images sent together).
+    """
+    if not is_active_hours():
+        await update.message.reply_text(ACTIVE_MSG)
+        return
+
+    # Get media group ID
+    media_group_id = update.message.media_group_id
+    if not media_group_id:
+        return  # Not a media group
+    
+    # Use context to store media group data
+    if 'media_groups' not in context.bot_data:
+        context.bot_data['media_groups'] = {}
+    
+    # Store this message in the media group
+    if media_group_id not in context.bot_data['media_groups']:
+        context.bot_data['media_groups'][media_group_id] = {
+            'messages': [],
+            'timer': None,
+            'processed': False
+        }
+    
+    # Add this message to the group
+    context.bot_data['media_groups'][media_group_id]['messages'].append(update.message)
+    
+    # Cancel existing timer and set a new one
+    if context.bot_data['media_groups'][media_group_id]['timer']:
+        context.bot_data['media_groups'][media_group_id]['timer'].cancel()
+    
+    # Set timer to process after 2 seconds of no new images
+    timer = asyncio.create_task(process_media_group_after_delay(
+        context, media_group_id, update.effective_user.id
+    ))
+    context.bot_data['media_groups'][media_group_id]['timer'] = timer
+
+async def process_media_group_after_delay(context, media_group_id, user_id):
+    """Process media group after a short delay to ensure all images are received."""
+    await asyncio.sleep(2)  # Wait 2 seconds for all images
+    
+    if (media_group_id not in context.bot_data['media_groups'] or
+        context.bot_data['media_groups'][media_group_id]['processed']):
+        return
+    
+    # Mark as processed
+    context.bot_data['media_groups'][media_group_id]['processed'] = True
+    
+    messages = context.bot_data['media_groups'][media_group_id]['messages']
+    
+    # Check if we have 2-4 images
+    if len(messages) < 2 or len(messages) > 4:
+        # Send error message to the first message in the group
+        first_message = messages[0]
+        await first_message.reply_text(
+            f"Multi-image generation supports 2-4 images only. You sent {len(messages)} images."
+        )
+        # Clean up
+        del context.bot_data['media_groups'][media_group_id]
+        return
+    
+    # Get caption from the first message that has one
+    prompt_text = None
+    for msg in messages:
+        if msg.caption:
+            prompt_text = msg.caption
+            break
+    
+    if not prompt_text:
+        first_message = messages[0]
+        await first_message.reply_text(
+            "Please provide a caption with your images. The caption will be used as the prompt."
+        )
+        # Clean up
+        del context.bot_data['media_groups'][media_group_id]
+        return
+    
+    # Process the multi-image request
+    await process_multi_image_request(messages, prompt_text, context, user_id)
+    
+    # Clean up
+    del context.bot_data['media_groups'][media_group_id]
+
+async def process_multi_image_request(messages, prompt_text, context, user_id):
+    """Process a multi-image generation request."""
+    try:
+        # Parse prompt flags
+        prompt_text, neg_prompt_text, flags = parse_prompt_flags(prompt_text)
+        
+        # Create temporary directory
+        temp_dir = "temp_downloads"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Download all images
+        image_paths = []
+        for i, message in enumerate(messages):
+            photo_file = await message.photo[-1].get_file()
+            image_path = os.path.join(temp_dir, f"{photo_file.file_id}_{i}.jpg")
+            await photo_file.download_to_drive(image_path)
+            image_paths.append(image_path)
+        
+        # Determine workflow - always use the multi-image workflow
+        wf_path = config.QWEN_8_STEP_I2I_4_INPUTS_PATH
+        workflow_name = wf_path.split('/')[-1].split('.')[0]
+        
+        # Determine model name for Magic Prompt
+        model_name = "QWEN Multi-Image"
+        
+        # Limit steps
+        if 'steps' in flags and flags['steps'] > config.MAX_STEPS:
+            first_message = messages[0]
+            await first_message.reply_text(
+                f"The maximum number of steps allowed is {config.MAX_STEPS}. Your request will be processed with {config.MAX_STEPS} steps."
+            )
+            flags['steps'] = config.MAX_STEPS
+        
+        # Send processing message
+        first_message = messages[0]
+        await first_message.reply_text(
+            f"🎨 {len(messages)} images received. Processing your multi-image request, this might take a moment..."
+        )
+        
+        # Clean prompt text
+        if prompt_text:
+            prompt_text = re.sub(r'\b(wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+        
+        # Create a fake update object for compatibility with existing functions
+        # Make sure to include the effective_user with proper id
+        fake_effective_user = type('FakeUser', (), {
+            'id': user_id,
+            'first_name': first_message.from_user.first_name,
+            'username': first_message.from_user.username
+        })()
+        
+        fake_update = type('FakeUpdate', (), {
+            'message': first_message,
+            'effective_user': fake_effective_user,
+            'effective_chat': first_message.chat,
+            'get_bot': lambda *args, **kwargs: context.bot
+        })()
+        
+        # Handle Magic Prompt enhancement
+        if GEMINI_AVAILABLE and context.user_data.get('magic_prompt', True):
+            enhancement_msg = await first_message.reply_text("✨ Enhancing your prompt with Magic Prompt (analyzing multiple images and text)...")
+            
+            # For multi-image, we'll use the first image for Magic Prompt
+            asyncio.create_task(handle_magic_prompt_enhancement(
+                fake_update, context, prompt_text, neg_prompt_text, 
+                enhancement_msg, model_name, flags, wf_path, workflow_name, image_paths[0],
+                image_paths  # Pass all image paths as additional parameter
+            ))
+        else:
+            await check_pending_jobs(fake_update)
+            await generate_multi_image_task(fake_update, context, prompt_text, neg_prompt_text, flags, wf_path, workflow_name, image_paths)
+            
+    except Exception as e:
+        logger.error(f"Failed to process multi-image request: {e}")
+        if messages:
+            await messages[0].reply_text(
+                "Sorry, something went wrong while processing your multi-image request. Please try again later."
+            )
+
+async def generate_multi_image_task(update, context, prompt_text, negative_prompt_text, flags, wf_path, workflow_name, image_paths, ai_model_name=None):
+    """Handle the actual multi-image generation."""
+    start_time = datetime.now()
+    
+    try:
+        generated_image_path, duration_seconds, seed = await asyncio.to_thread(
+            generate_image,
+            image_path=None,  # Not used for multi-image
+            image_paths=image_paths,  # Use the new parameter
+            prompt_text=prompt_text,
+            workflow_path=wf_path,
+            server_address=config.COMFYUI_SERVER_ADDRESS,
+            flags=flags,
+            fast_film_grain=flags.get('fast_film_grain', False),
+            resize_resolution=flags.get('resize') if flags.get('resize') else None,
+            allow_resize=update.effective_user.id == config.MY_USER_ID
+        )
+        
+        time.sleep(1)
+        
+        # Use ComfyUI's duration if available, otherwise calculate fallback
+        if duration_seconds is None:
+            end_time = datetime.now()
+            duration = end_time - start_time
+            duration_seconds = duration.total_seconds()
+
+        if generated_image_path and os.path.exists(generated_image_path):
+            logger.info(f"Multi-image generated successfully in {duration_seconds:.1f} seconds: {generated_image_path}\n\n")
+            
+            await send_image_with_logging(
+                update,
+                generated_image_path,
+                prompt_text,
+                f"Multi-Image-to-Image ({len(image_paths)} images)",
+                flags,
+                seed,
+                duration_seconds,
+                workflow_name,
+                nogroup=flags.get('nogroup', False),
+                ai_model_name=ai_model_name
+            )
+        else:
+            raise FileNotFoundError("The generated image file was not found.")
+
+    except Exception as e:
+        logger.error(f"Failed to generate multi-image for user {update.effective_user.id}. Error: {e}\n\n")
+        await update.message.reply_text(
+            "Sorry, something went wrong while generating the multi-image. Please try again later."
+        )
+    finally:
+        # Clean up the downloaded images
+        for image_path in image_paths:
+            if os.path.exists(image_path):
+                os.remove(image_path)

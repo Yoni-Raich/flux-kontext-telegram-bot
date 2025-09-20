@@ -1,7 +1,7 @@
 {
   "1": {
     "inputs": {
-      "model_name": "4x-ClearRealityV1.pth"
+      "model_name": "4x_NMKD-Siax_200k.pth"
     },
     "class_type": "UpscaleModelLoader",
     "_meta": {
@@ -71,7 +71,7 @@
   },
   "10": {
     "inputs": {
-      "text": "The Golden Arch of Storms \"Inside a dark cavern filled with floating rocks, a portal manifests as a gothic arch crackling with golden and amber lightning. The energy creates a sunset orange core that shifts to brilliant yellow at the edges. Below it gather: a merchant caravan of six beings preparing to cross, their faces lit by warm golden light, children playing with toys that spark with static electricity, guards in black armor with gold energy shields, and a navigator holding an orb that resonates with the portal's frequency, casting honey-colored shadows.\"",
+      "text": "",
       "clip": [
         "8",
         1
@@ -84,7 +84,7 @@
   },
   "11": {
     "inputs": {
-      "image": "ComfyUI_00262_.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -120,7 +120,7 @@
     "inputs": {
       "upscale_by": 2,
       "seed": 286286128032438,
-      "steps": 8,
+      "steps": 2,
       "cfg": 1,
       "sampler_name": "deis",
       "scheduler": "normal",

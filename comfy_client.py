@@ -24,11 +24,26 @@ def find_node_by_class(workflow, class_type, neg_text=False):
                 return node_id
     return None
 
+def find_load_image_nodes_by_title(workflow):
+    """
+    Find LoadImage nodes by their titles for multi-image workflows.
+    Returns a dictionary mapping titles to node IDs.
+    """
+    load_image_nodes = {}
+    for node_id, node_data in workflow.items():
+        if (node_data.get("class_type") == "LoadImage" and 
+            "title" in node_data.get("_meta", {})):
+            title = node_data["_meta"]["title"]
+            if "Load Image" in title:
+                load_image_nodes[title] = node_id
+    return load_image_nodes
+
 def generate_image(prompt_text: str, 
                    workflow_path: str, 
                    server_address="127.0.0.1:8001", 
                    output_dir="output", 
                    image_path=None, 
+                   image_paths=None,  # New parameter for multiple images
                    flags=None, 
                    fast_film_grain=False, 
                    neg_prompt_text=None, 
@@ -38,7 +53,8 @@ def generate_image(prompt_text: str,
     Generates an image using a ComfyUI workflow.
 
     Args:
-        image_path (str): Path to the input image.
+        image_path (str): Path to the input image (single image).
+        image_paths (list): List of paths to input images (multiple images).
         prompt_text (str): The text prompt.
         workflow_path (str): Path to the ComfyUI workflow JSON file.
         server_address (str, optional): The address of the ComfyUI server. Defaults to "127.0.0.1:8001".
@@ -51,8 +67,26 @@ def generate_image(prompt_text: str,
     """
     client_id = str(uuid.uuid4())
     
-    if image_path:
-        # 1. Upload the image
+    uploaded_filenames = []
+    
+    # Handle multiple images
+    if image_paths:
+        print(f"Uploading {len(image_paths)} images...\n\n")
+        for i, img_path in enumerate(image_paths):
+            with open(img_path, 'rb') as f:
+                files = {'image': (os.path.basename(img_path), f, 'image/jpeg')}
+                data = {'overwrite': 'true', 'subfolder': ''}
+                response = requests.post(f"http://{server_address}/upload/image", files=files, data=data)
+
+            if response.status_code != 200:
+                print(f"Error uploading image {i+1}: {response.text}\n\n")
+                return None
+
+            upload_response = response.json()
+            uploaded_filenames.append(upload_response['name'])
+            print(f"Image {i+1} uploaded as: {upload_response['name']}\n\n")
+    elif image_path:
+        # Single image upload (existing code)
         print("Uploading image...\n\n")
         with open(image_path, 'rb') as f:
             files = {'image': (os.path.basename(image_path), f, 'image/jpeg')}
@@ -64,8 +98,8 @@ def generate_image(prompt_text: str,
             return None
 
         upload_response = response.json()
-        image_filename = upload_response['name']
-        print(f"Image uploaded as: {image_filename}\n\n")
+        uploaded_filenames.append(upload_response['name'])
+        print(f"Image uploaded as: {upload_response['name']}\n\n")
 
     # 2. Load and update the workflow
     with open(workflow_path, 'r', encoding='utf-8') as f:
@@ -101,12 +135,32 @@ def generate_image(prompt_text: str,
     # Update resolution if provided
     update_resolution(workflow, resize_resolution, allow_resize)
 
-
-    # For image-to-image, update LoadImage node if present
-    if image_path:
-        load_image_node = find_node_by_class(workflow, "LoadImage")
-        if load_image_node:
-            workflow[load_image_node]["inputs"]["image"] = image_filename
+    # Handle image assignment to LoadImage nodes
+    if uploaded_filenames:
+        if len(uploaded_filenames) > 1:
+            # Multi-image workflow - find LoadImage nodes by title
+            load_image_nodes = find_load_image_nodes_by_title(workflow)
+            
+            # Map images to the numbered LoadImage nodes
+            title_mappings = [
+                "Load Image 1",
+                "Load Image 2", 
+                "Load Image 3",
+                "Load Image 4"
+            ]
+            
+            for i, filename in enumerate(uploaded_filenames):
+                if i < len(title_mappings):
+                    title = title_mappings[i]
+                    if title in load_image_nodes:
+                        node_id = load_image_nodes[title]
+                        workflow[node_id]["inputs"]["image"] = filename
+                        print(f"Assigned {filename} to {title} (node {node_id})\n\n")
+        else:
+            # Single image workflow (existing logic)
+            load_image_node = find_node_by_class(workflow, "LoadImage")
+            if load_image_node:
+                workflow[load_image_node]["inputs"]["image"] = uploaded_filenames[0]
 
     # 3. Queue the prompt
     prompt_payload = {"prompt": workflow, "client_id": client_id}

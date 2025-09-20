@@ -195,7 +195,7 @@
   },
   "110": {
     "inputs": {
-      "image": "Qwen Image Edit - Inpaint Input.png"
+      "image": "empty.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -224,7 +224,7 @@
   },
   "113": {
     "inputs": {
-      "image": "ComfyUI_00293_.png"
+      "image": "empty.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -245,7 +245,7 @@
   },
   "115": {
     "inputs": {
-      "image": "Qwen Image Edit - Combine 3 Images Man Input.png"
+      "image": "empty.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -294,7 +294,7 @@
   },
   "118": {
     "inputs": {
-      "image": "ComfyUI_00295_.png"
+      "image": "empty.png"
     },
     "class_type": "LoadImage",
     "_meta": {

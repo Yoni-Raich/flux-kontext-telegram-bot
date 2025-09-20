@@ -253,7 +253,7 @@
   },
   "20": {
     "inputs": {
-      "image": "photo_2025-08-14_19-14-42.jpg"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -262,7 +262,7 @@
   },
   "21": {
     "inputs": {
-      "text": " Explosion of paint and musical notes frozen in mid-air, instruments transforming into geometric patterns, still frame, no motion blur",
+      "text": "",
       "clip": [
         "14",
         1
