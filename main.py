@@ -3,7 +3,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, P
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import config
-from bot_handler import start_command, handle_image, help_command, handle_text_prompt, magic_prompt_command, set_bot_commands
+from bot_handler import start_command, handle_image, help_command, handle_text_prompt, magic_prompt_command, set_bot_commands, handle_audio
 
 asyncio.get_event_loop().set_default_executor(ThreadPoolExecutor(max_workers=200))
 
@@ -41,8 +41,10 @@ def main():
     application.add_handler(CommandHandler("magic", magic_prompt_command))
     
     # Register message handlers
+    application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | (filters.Document.AUDIO), handle_audio))
     application.add_handler(MessageHandler(filters.PHOTO, handle_image))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_prompt))
+
 
     # Set bot commands for the menu after startup
     application.post_init = post_init

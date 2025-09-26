@@ -27,7 +27,7 @@
   },
   "3": {
     "inputs": {
-      "filename_prefix": "UP",
+      "filename_prefix": "QWEN_UP",
       "images": [
         "9",
         0

@@ -9,7 +9,7 @@ from telegram.constants import ParseMode
 from datetime import datetime
 
 import config
-from comfy_client import generate_image, is_any_job_running, get_pending_job_count
+from comfy_client import generate_image, is_any_job_running, get_pending_job_count, generate_audio
 
 # Try to import Gemini client, make it optional
 try:
@@ -212,6 +212,8 @@ def determine_model_name(prompt_text, flags, is_image_to_image=False):
         if 'upscale' in flags:
             if prompt_text and 'wan21' in prompt_text.lower():
                 return "WAN 2.1 Upscaler"
+            elif prompt_text and ('nunchakuflux' in prompt_text.lower() or 'nnchflxasd' in prompt_text.lower() or 'fluxmaniaup' in prompt_text.lower()):
+                return "Nunchaku Flux Upscaler"
             return "QWEN"
         elif 'simpleup' in flags:
             return "AI Image Generator"
@@ -282,6 +284,12 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'upscale' in flags:
         if prompt_text and 'wan21' in prompt_text.lower():
             wf_path = config.WAN_2_1_UPSCALER_FILE_PATH
+        elif prompt_text and 'nunchakuflux' in prompt_text.lower():
+            wf_path = config.NUNCHAKU_FLUX_UPSCALER
+        elif prompt_text and 'nnchflxasd' in prompt_text.lower():
+            wf_path = config.FLUX_NUNCHAKU_UPSCALER_ASD_PATH
+        elif prompt_text and 'fluxmaniaup' in prompt_text.lower():
+            wf_path = config.FLUXMANIA_UPSCALER_2048_FILE_PATH
         else:
             wf_path = config.QWEN_UPSCALER_FILE_PATH
     elif 'simpleup' in flags:
@@ -304,7 +312,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if prompt_text:
-        prompt_text = re.sub(r'\b(wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+        prompt_text = re.sub(r'\b(wan21|qwen4|qwen8|nunchakuflux|fluxmaniaup|nnchflxasd)\b', '', prompt_text, flags=re.IGNORECASE).strip()
     async def process_and_respond(): 
         nonlocal prompt_text, neg_prompt_text 
         # Check if Magic Prompt is enabled for this user - using multimodal enhancement
@@ -1211,3 +1219,298 @@ async def generate_multi_image_task(update, context, prompt_text, negative_promp
         for image_path in image_paths:
             if os.path.exists(image_path):
                 os.remove(image_path)
+
+
+
+
+
+
+
+
+
+
+@authorized
+async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handles incoming audio files with captions for voice cloning.
+    """
+    if not is_active_hours():
+        await update.message.reply_text(ACTIVE_MSG)
+        return
+
+    if not update.message.caption:
+        await update.message.reply_text(
+            "Please send an audio file with a caption. The caption will be used as the text for voice cloning."
+        )
+        return
+
+    prompt_text = update.message.caption
+    
+    # Get the audio file - handle different audio message types
+    audio_file = None
+    if update.message.audio:
+        audio_file = update.message.audio
+        file_extension = "mp3"  # Default for audio
+    elif update.message.voice:
+        audio_file = update.message.voice
+        file_extension = "ogg"  # Telegram voice messages are usually OGG
+    elif update.message.document:
+        # Check if document is an audio file
+        if update.message.document.mime_type and update.message.document.mime_type.startswith('audio/'):
+            audio_file = update.message.document
+            # Get extension from filename or mime_type
+            if update.message.document.file_name:
+                file_extension = update.message.document.file_name.split('.')[-1].lower()
+            else:
+                # Map mime types to extensions
+                mime_to_ext = {
+                    'audio/mpeg': 'mp3',
+                    'audio/mp3': 'mp3',
+                    'audio/wav': 'wav',
+                    'audio/ogg': 'ogg',
+                    'audio/flac': 'flac',
+                    'audio/m4a': 'm4a',
+                    'audio/aiff': 'aiff',
+                    'audio/webm': 'webm'
+                }
+                file_extension = mime_to_ext.get(update.message.document.mime_type, 'mp3')
+        else:
+            await update.message.reply_text(
+                "Please send a valid audio file. Supported formats: .opus, .flac, .webm, .weba, .wav, .ogg, .m4a, .oga, .mid, .mp3, .aiff, .wma, .au"
+            )
+            return
+    else:
+        await update.message.reply_text(
+            "Please send an audio file with a caption."
+        )
+        return
+
+    # Parse flags from caption (reuse existing function)
+    prompt_text, _, flags = parse_prompt_flags(prompt_text)
+
+    # Create audio directory if it doesn't exist
+    audio_dir = "temp_audio"  # You can configure this later
+    os.makedirs(audio_dir, exist_ok=True)
+
+    # Download the audio file
+    try:
+        telegram_file = await audio_file.get_file()
+        input_audio_path = os.path.join(audio_dir, f"{telegram_file.file_id}.{file_extension}")
+        await telegram_file.download_to_drive(input_audio_path)
+    except Exception as e:
+        logger.error(f"Failed to download audio file: {e}")
+        await update.message.reply_text(
+            "Sorry, failed to download the audio file. Please try again."
+        )
+        return
+
+    logger.info(f"Received audio from {update.effective_user.first_name}. Text: '{prompt_text}'\n\n")
+    await update.message.reply_text(
+        "🎵 Audio received. Processing your voice cloning request, this might take a moment..."
+    )
+
+    # Process the audio
+    async def process_and_respond():
+        try:
+            # Use the VibeVoice workflow
+            wf_path = config.VIBEVOICE_CLONING_WORKFLOW_PATH  # You'll need to add this to config
+            workflow_name = "vibevoice_cloning"
+            
+            generated_audio_path, duration_seconds, _ = await asyncio.to_thread(
+                generate_audio,  # You'll need to create this function or modify generate_image
+                audio_path=input_audio_path,
+                prompt_text=prompt_text,
+                workflow_path=wf_path,
+                server_address=config.COMFYUI_SERVER_ADDRESS,
+                flags=flags
+            )
+
+            if generated_audio_path and os.path.exists(generated_audio_path):
+                logger.info(f"Audio generated successfully in {duration_seconds:.1f} seconds: {generated_audio_path}\n\n")
+                await send_audio_with_logging(
+                    update,
+                    generated_audio_path,
+                    prompt_text,
+                    "Voice Cloning",
+                    flags,
+                    duration_seconds,
+                    workflow_name,
+                    nogroup=flags.get('nogroup', False)
+                )
+            else:
+                raise FileNotFoundError("The generated audio file was not found.")
+
+        except Exception as e:
+            logger.error(f"Failed to generate audio for user {update.effective_user.id}. Error: {e}\n\n")
+            await update.message.reply_text(
+                "Sorry, something went wrong while processing the audio. Please try again later."
+            )
+        finally:
+            # Clean up the downloaded audio
+            if os.path.exists(input_audio_path):
+                os.remove(input_audio_path)
+
+    asyncio.create_task(process_and_respond())
+
+async def send_audio_with_logging(
+    update: Update,
+    audio_path: str,
+    prompt_text: str,
+    workflow_type: str = "Voice Cloning",
+    flags=None,
+    duration_seconds=None,
+    workflow_name=None,
+    nogroup=False
+):
+    """
+    Sends the generated audio to both the user and the logging group.
+    """
+    # Telegram's file size limits
+    AUDIO_SIZE_LIMIT = 52428800  # 50MB for audio files
+    DOCUMENT_SIZE_LIMIT = 52428800  # 50MB for documents
+    
+    # Check file size
+    file_size = os.path.getsize(audio_path)
+    
+    # Format duration string
+    duration_str = ""
+    if duration_seconds:
+        if duration_seconds >= 60:
+            minutes = int(duration_seconds // 60)
+            seconds = int(duration_seconds % 60)
+            duration_str = f"\n⏱️ Processing time: {minutes}m {seconds}s ({duration_seconds:.1f} secs)"
+        else:
+            duration_str = f"\n⏱️ Processing time: {duration_seconds:.1f}s"
+
+    # Add file size info
+    file_size_str = f"\n📁 File size: {file_size / 1024 / 1024:.1f}MB"
+
+    # Prepare the caption
+    user_caption = (
+        f"Generation Type: {workflow_type}\n\n"
+        f"Text: {prompt_text}\n\n"
+        f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else 'Default'}\n"
+        f"Steps: {flags.get('steps') if flags.get('steps') is not None else 'Default'}\n"
+        f"{duration_str}"
+        f"{file_size_str}\n\n"
+        f"Workflow: {workflow_name}"
+    )
+
+    group_caption = (
+        f"Audio generated by: @{update.effective_user.username or 'Unknown'}\n"
+        f"User ID: {update.effective_user.id}\n"
+        f"Generation Type: {workflow_type}\n\n"
+        f"Text: {prompt_text}\n\n"
+        f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else 'Default'}\n"
+        f"Steps: {flags.get('steps') if flags.get('steps') is not None else 'Default'}\n"
+        f"{duration_str}"
+        f"{file_size_str}\n\n"
+        f"Workflow: {workflow_name}"
+    )
+
+    # Determine file extension for appropriate sending method
+    file_extension = audio_path.split('.')[-1].lower()
+    filename = f"generated_voice_{workflow_name}.{file_extension}"
+
+    # Send to user
+    try:
+        if file_size <= AUDIO_SIZE_LIMIT and file_extension in ['mp3', 'wav', 'm4a', 'ogg','flac']:
+            # Send as audio file (shows player controls)
+            if len(user_caption) <= 1024:
+                await update.message.reply_audio(
+                    audio=open(audio_path, 'rb'),
+                    caption=user_caption,
+                    title=f"Voice Clone - {workflow_name}",
+                    filename=filename
+                )
+            else:
+                await update.message.reply_audio(
+                    audio=open(audio_path, 'rb'),
+                    title=f"Voice Clone - {workflow_name}",
+                    filename=filename
+                )
+                # Send caption as text
+                text_parts = split_long_text(user_caption, max_length=4096)
+                for part in text_parts:
+                    await update.message.reply_text(part)
+        else:
+            # Send as document if file is too large or unsupported audio format
+            if len(user_caption) <= 1024:
+                await update.message.reply_document(
+                    document=open(audio_path, 'rb'),
+                    caption=user_caption,
+                    filename=filename
+                )
+            else:
+                await update.message.reply_document(
+                    document=open(audio_path, 'rb'),
+                    filename=filename
+                )
+                # Send caption as text
+                text_parts = split_long_text(user_caption, max_length=4096)
+                for part in text_parts:
+                    await update.message.reply_text(part)
+
+    except Exception as e:
+        logger.error(f"Failed to send audio to user: {e}")
+        # Fallback: send as document
+        try:
+            await update.message.reply_document(
+                document=open(audio_path, 'rb'),
+                caption="Audio file sent as document.",
+                filename=filename
+            )
+        except Exception as e2:
+            logger.error(f"Failed to send audio as document: {e2}")
+
+    # Send to logging group if configured and nogroup flag is not set
+    if not nogroup and hasattr(config, 'LOGGING_GROUP_ID') and config.LOGGING_GROUP_ID:
+        try:
+            if file_size <= AUDIO_SIZE_LIMIT and file_extension in ['mp3', 'wav', 'm4a', 'ogg', 'flac']:
+                # Send as audio file
+                if len(group_caption) <= 1024:
+                    await update.get_bot().send_audio(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        audio=open(audio_path, 'rb'),
+                        caption=group_caption,
+                        title=f"Voice Clone - {workflow_name}",
+                        filename=filename
+                    )
+                else:
+                    await update.get_bot().send_audio(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        audio=open(audio_path, 'rb'),
+                        title=f"Voice Clone - {workflow_name}",
+                        filename=filename
+                    )
+                    # Send caption as text
+                    text_parts = split_long_text(group_caption, max_length=4096)
+                    for part in text_parts:
+                        await update.get_bot().send_message(
+                            chat_id=config.LOGGING_GROUP_ID,
+                            text=part
+                        )
+            else:
+                # Send as document
+                if len(group_caption) <= 1024:
+                    await update.get_bot().send_document(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        document=open(audio_path, 'rb'),
+                        caption=group_caption,
+                        filename=filename
+                    )
+                else:
+                    await update.get_bot().send_document(
+                        chat_id=config.LOGGING_GROUP_ID,
+                        document=open(audio_path, 'rb'),
+                        filename=filename
+                    )
+                    # Send caption as text
+                    text_parts = split_long_text(group_caption, max_length=4096)
+                    for part in text_parts:
+                        await update.get_bot().send_message(
+                            chat_id=config.LOGGING_GROUP_ID,
+                            text=part
+                        )
+        except Exception as e:
+            logger.error(f"Failed to send audio to logging group: {e}")

@@ -416,3 +416,207 @@ def update_resolution(workflow, resize_resolution, allow_resize=False):
                 set_resize(workflow=workflow, node_id=resize_node, 
                          width=width, height=height, allow_resize=allow_resize)
                 break
+
+
+def generate_audio(
+    audio_path: str,
+    prompt_text: str,
+    workflow_path: str,
+    server_address: str,
+    flags: dict = None
+):
+    """
+    Generate audio using VibeVoice workflow.
+    """
+    client_id = str(uuid.uuid4())
+    if flags is None:
+        flags = {}
+    
+    try:
+        # 1. Instead of uploading, we'll use the local file path directly
+        # ComfyUI LoadAudio nodes typically work with absolute file paths
+        print("Preparing audio file for ComfyUI...\n\n")
+        
+        # Convert to absolute path
+        abs_audio_path = os.path.abspath(audio_path)
+        print(f"Using audio file: {abs_audio_path}\n\n")
+
+        # 2. Load the workflow
+        with open(workflow_path, 'r') as f:
+            workflow = json.load(f)
+        
+        # Find nodes dynamically using the existing function
+        load_audio_node = find_node_by_class(workflow, "LoadAudio")
+        string_multiline_node = find_node_by_class(workflow, "PrimitiveStringMultiline")
+        vibevoice_node = find_node_by_class(workflow, "VibeVoiceMultipleSpeakersNode")
+        save_audio_node = find_node_by_class(workflow, "SaveAudio")
+        
+        # Set the absolute audio file path in LoadAudio node
+        if load_audio_node:
+            workflow[load_audio_node]["inputs"]["audio"] = abs_audio_path
+            print(f"Set LoadAudio node ({load_audio_node}) audio input to: {abs_audio_path}\n\n")
+        else:
+            raise Exception("LoadAudio node not found in workflow")
+        
+        # Set the text in PrimitiveStringMultiline node
+        if string_multiline_node:
+            workflow[string_multiline_node]["inputs"]["value"] = prompt_text
+            print(f"Set text input to: {prompt_text}\n\n")
+        else:
+            raise Exception("PrimitiveStringMultiline node not found in workflow")
+        
+        # Set other parameters from flags if provided
+        if vibevoice_node:
+            if flags.get('seed'):
+                workflow[vibevoice_node]["inputs"]["seed"] = flags['seed']
+            if flags.get('cfg'):
+                workflow[vibevoice_node]["inputs"]["cfg_scale"] = flags['cfg']
+            if flags.get('steps'):
+                workflow[vibevoice_node]["inputs"]["diffusion_steps"] = flags['steps']
+            if flags.get('temperature'):
+                workflow[vibevoice_node]["inputs"]["temperature"] = flags['temperature']
+            if flags.get('top_p'):
+                workflow[vibevoice_node]["inputs"]["top_p"] = flags['top_p']
+            print(f"Configured VibeVoice node ({vibevoice_node}) with parameters\n\n")
+        else:
+            print("Warning: VibeVoiceMultipleSpeakersNode not found in workflow")
+        
+        # Debug: Print the final workflow configuration for the LoadAudio node
+        if load_audio_node:
+            print(f"LoadAudio node configuration: {workflow[load_audio_node]['inputs']}\n\n")
+        
+        # 3. Queue the workflow
+        ws = websocket.WebSocket()
+        ws.connect(f"ws://{server_address}/ws?clientId={client_id}")
+        
+        start_time = time.time()
+        
+        prompt_payload = {"prompt": workflow, "client_id": client_id}
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(f"http://{server_address}/prompt", data=json.dumps(prompt_payload), headers=headers)
+        
+        if response.status_code != 200:
+            print(f"Queue response: {response.text}\n\n")
+            raise Exception(f"Failed to queue workflow: {response.text}")
+        
+        prompt_id = response.json()['prompt_id']
+        print(f"Audio prompt queued with ID: {prompt_id}\n\n")
+        
+        # 4. Wait for completion and get the output
+        print("Waiting for audio generation...\n\n")
+        try:
+            while True:
+                out = ws.recv()
+                if isinstance(out, str):
+                    message = json.loads(out)
+                    if message.get('type') == 'executing':
+                        data = message.get('data', {})
+                        if data.get('node') is None and data.get('prompt_id') == prompt_id:
+                            print("Audio generation finished.\n\n")
+                            break # Execution is done for our prompt
+                        elif data.get('node') is not None:
+                            print(f"Executing node: {data.get('node')}")
+                    elif message.get('type') == 'execution_error':
+                        print(f"Execution error: {message}")
+                        raise Exception(f"Workflow execution failed: {message}")
+                else:
+                    continue
+        finally:
+            ws.close()
+        
+        # 5. Get the generated audio file from history
+        history_url = f"http://{server_address}/history/{prompt_id}"
+        for attempt in range(5):
+            with urllib.request.urlopen(history_url) as response:
+                history = json.loads(response.read())
+            if history and prompt_id in history:
+                break
+            else:
+                print('History not found, retrying...')
+                time.sleep(1)
+
+        if prompt_id not in history:
+            raise Exception("Prompt ID not found in history.")
+
+        history_data = history[prompt_id]
+        print(f"History data: {json.dumps(history_data, indent=2)}\n\n")
+        
+        # Calculate duration using existing function
+        duration = get_duration_from_history(history_data)
+        if duration:
+            print(f"Audio generation took: {duration:.1f} seconds\n\n")
+        else:
+            end_time = time.time()
+            duration = end_time - start_time
+        
+        outputs = history_data.get('outputs', {})
+        print(f"Available outputs: {list(outputs.keys())}\n\n")
+        
+        # Find the SaveAudio node output using the node ID we found
+        output_audio = None
+        if save_audio_node and save_audio_node in outputs:
+            node_output = outputs[save_audio_node]
+            print(f"SaveAudio node output: {node_output}\n\n")
+            if 'audio' in node_output:
+                for audio_info in node_output['audio']:
+                    filename = audio_info['filename']
+                    subfolder = audio_info.get('subfolder', '')
+                    
+                    # Download the audio file
+                    audio_url = f"http://{server_address}/view?filename={urllib.parse.quote_plus(filename)}&subfolder={urllib.parse.quote_plus(subfolder)}&type=output"
+                    print(f"Attempting to download from: {audio_url}\n\n")
+                    audio_response = requests.get(audio_url)
+                    
+                    if audio_response.status_code == 200:
+                        # Save to output directory
+                        os.makedirs("output", exist_ok=True)
+                        output_path = os.path.join("output", filename)
+                        with open(output_path, 'wb') as f:
+                            f.write(audio_response.content)
+                        
+                        output_audio = os.path.abspath(output_path)
+                        print(f"Audio saved to: {output_audio}\n\n")
+                        break
+                    else:
+                        print(f"Failed to download audio: {audio_response.status_code} - {audio_response.text}")
+        
+        # Fallback: search all outputs for audio files if direct lookup failed
+        if not output_audio:
+            print("Searching all outputs for audio files...\n\n")
+            for node_id in outputs:
+                node_output = outputs[node_id]
+                print(f"Checking node {node_id}: {node_output}\n\n")
+                if 'audio' in node_output:
+                    for audio_info in node_output['audio']:
+                        filename = audio_info['filename']
+                        subfolder = audio_info.get('subfolder', '')
+                        
+                        # Download the audio file
+                        audio_url = f"http://{server_address}/view?filename={urllib.parse.quote_plus(filename)}&subfolder={urllib.parse.quote_plus(subfolder)}&type=output"
+                        print(f"Attempting to download from: {audio_url}\n\n")
+                        audio_response = requests.get(audio_url)
+                        
+                        if audio_response.status_code == 200:
+                            # Save to output directory
+                            os.makedirs("output", exist_ok=True)
+                            output_path = os.path.join("output", filename)
+                            with open(output_path, 'wb') as f:
+                                f.write(audio_response.content)
+                            
+                            output_audio = os.path.abspath(output_path)
+                            print(f"Audio saved to: {output_audio}\n\n")
+                            break
+                        else:
+                            print(f"Failed to download audio: {audio_response.status_code} - {audio_response.text}")
+                
+                if output_audio:
+                    break
+        
+        if not output_audio:
+            raise Exception("No audio output found in workflow results")
+        
+        return output_audio, duration, None  # No seed for audio
+        
+    except Exception as e:
+        print(f"Error in generate_audio: {e}")
+        raise e
