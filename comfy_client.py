@@ -469,6 +469,8 @@ def generate_audio(
         if vibevoice_node:
             if flags.get('seed'):
                 workflow[vibevoice_node]["inputs"]["seed"] = flags['seed']
+            else:                
+                workflow[vibevoice_node]["inputs"]["seed"] = random.randint(0, 2**53 - 1)
             if flags.get('cfg'):
                 workflow[vibevoice_node]["inputs"]["cfg_scale"] = flags['cfg']
             if flags.get('steps'):

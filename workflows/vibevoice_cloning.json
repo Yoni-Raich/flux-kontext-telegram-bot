@@ -8,11 +8,11 @@
       "model": "VibeVoice-Large",
       "attention_type": "auto",
       "free_memory_after_generate": true,
-      "diffusion_steps": 20,
+      "diffusion_steps": 30,
       "seed": 3633220125,
       "cfg_scale": 1.7,
       "use_sampling": false,
-      "temperature": 0.95,
+      "temperature": 0.80,
       "top_p": 0.95,
       "speaker1_voice": [
         "596",
