@@ -406,22 +406,22 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
     elif callback_data == "help_queue":
         try:
             logger.info(f"Checking queue status for server: {config.COMFYUI_SERVER_ADDRESS}")
-            
+
             # Get queue information with detailed logging
             is_running = False
             pending_count = 0
-            
+
             try:
                 is_running = is_any_job_running(config.COMFYUI_SERVER_ADDRESS)
                 logger.info(f"is_any_job_running returned: {is_running}")
-                
+
                 pending_count = get_pending_job_count(config.COMFYUI_SERVER_ADDRESS)
                 logger.info(f"get_pending_job_count returned: {pending_count}")
-                
+
             except Exception as queue_error:
                 logger.error(f"Error getting queue info: {queue_error}")
                 raise queue_error
-            
+
             # Create status message
             if is_running:
                 if pending_count > 1:
@@ -433,37 +433,34 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             else:
                 status_emoji = "🟢"
                 status_text = "Available \\- No jobs in queue"
-            
+
             logger.info(f"Final status: {status_emoji} {status_text}")
-            
+
             # Add current time to make the message unique on refresh
             from datetime import datetime
             current_time = datetime.now().strftime("%H:%M:%S")
-            
+
             text = (
                 f"*📊 ComfyUI Queue Status*\n\n"
                 f"{status_emoji} *Server Status:* {status_text}\n\n"
                 f"*Server Address:* `{config.COMFYUI_SERVER_ADDRESS}`\n\n"
-                f"*Last Updated:* {current_time}\n\n"
-                f"*Debug Info:*\n"
-                f"• is\\_running: {is_running}\n"
-                f"• pending\\_count: {pending_count}\n\n"
+                f"*Last Updated:* {current_time}\n\n"                
                 f"*What this means:*\n"
                 f"• 🟢 Available: Your request will start immediately\n"
                 f"• 🟡 Busy: One job running, minimal wait\n"
                 f"• 🔴 Queue: Multiple jobs waiting, longer wait time\n\n"
                 f"*Note:* Status updates in real\\-time when you click refresh\\."
             )
-            
+
             # Add refresh button
             refresh_keyboard = [
                 [InlineKeyboardButton("🔄 Refresh Status", callback_data="help_queue")],
                 [InlineKeyboardButton("🔙 Back to Help Menu", callback_data="help_main")]
             ]
             refresh_markup = InlineKeyboardMarkup(refresh_keyboard)
-            
+
             await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=refresh_markup)
-            
+
         except Exception as e:
             # Check if the error is about message not being modified
             if "Message is not modified" in str(e):
@@ -483,14 +480,14 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
                     f"• Server is temporarily unavailable\n\n"
                     f"Please try again later or contact the administrator\\."
                 )
-                
+
                 # Add refresh and back buttons even on error
                 error_keyboard = [
                     [InlineKeyboardButton("🔄 Try Again", callback_data="help_queue")],
                     [InlineKeyboardButton("🔙 Back to Help Menu", callback_data="help_main")]
                 ]
                 error_markup = InlineKeyboardMarkup(error_keyboard)
-                
+
                 await query.edit_message_text(error_text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=error_markup)
 
         except Exception as e:
