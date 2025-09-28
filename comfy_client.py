@@ -106,7 +106,7 @@ def generate_image(prompt_text: str,
         workflow = json.load(f)
 
     # Find the correct nodes dynamically
-    text_node = find_node_by_class(workflow, "CLIPTextEncode") or find_node_by_class(workflow, "TextEncodeQwenImageEdit")
+    text_node = find_node_by_class(workflow, "CLIPTextEncode") or find_node_by_class(workflow, "TextEncodeQwenImageEdit") or find_node_by_class(workflow, "PrimitiveStringMultiline")
     if neg_prompt_text:
         neg_prompt_text_node = find_node_by_class(workflow, "CLIPTextEncode", neg_text=True)
     ksampler_node = find_node_by_class(workflow, "KSampler")
@@ -348,6 +348,8 @@ def update_prompt_text(workflow, text_node, prompt_text, neg_prompt_text_node=No
             workflow[text_node]["inputs"]["text"] = prompt_text
         elif "prompt" in workflow[text_node]["inputs"]:
             workflow[text_node]["inputs"]["prompt"] = prompt_text
+        elif "value" in workflow[text_node]["inputs"]:  # For PrimitiveStringMultiline
+            workflow[text_node]["inputs"]["value"] = prompt_text
         else:
             print(f"Warning: Node {text_node} doesn't have 'text' or 'prompt' input field")
      
@@ -465,12 +467,22 @@ def generate_audio(
         else:
             raise Exception("PrimitiveStringMultiline node not found in workflow")
         
-        # Set other parameters from flags if provided
+        # Set other parameters from flags if provided and track the seed used
+        seed_val = None
         if vibevoice_node:
             if flags.get('seed'):
-                workflow[vibevoice_node]["inputs"]["seed"] = flags['seed']
-            else:                
-                workflow[vibevoice_node]["inputs"]["seed"] = random.randint(0, 2**53 - 1)
+                # Ensure user-provided seed is within valid range
+                user_seed = flags['seed']
+                if user_seed > 4294967295:
+                    user_seed = user_seed % 4294967295
+                workflow[vibevoice_node]["inputs"]["seed"] = user_seed
+                seed_val = user_seed
+            else:
+                # Generate random seed within valid range for audio workflows
+                generated_seed = random.randint(0, 4294967295)
+                workflow[vibevoice_node]["inputs"]["seed"] = generated_seed
+                seed_val = generated_seed
+            
             if flags.get('cfg'):
                 workflow[vibevoice_node]["inputs"]["cfg_scale"] = flags['cfg']
             if flags.get('steps'):
@@ -479,7 +491,7 @@ def generate_audio(
                 workflow[vibevoice_node]["inputs"]["temperature"] = flags['temperature']
             if flags.get('top_p'):
                 workflow[vibevoice_node]["inputs"]["top_p"] = flags['top_p']
-            print(f"Configured VibeVoice node ({vibevoice_node}) with parameters\n\n")
+            print(f"Configured VibeVoice node ({vibevoice_node}) with seed: {seed_val}\n\n")
         else:
             print("Warning: VibeVoiceMultipleSpeakersNode not found in workflow")
         
@@ -617,7 +629,7 @@ def generate_audio(
         if not output_audio:
             raise Exception("No audio output found in workflow results")
         
-        return output_audio, duration, None  # No seed for audio
+        return output_audio, duration, seed_val  # Return the actual seed used
         
     except Exception as e:
         print(f"Error in generate_audio: {e}")

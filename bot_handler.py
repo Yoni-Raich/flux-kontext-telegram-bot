@@ -1104,8 +1104,19 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
             await photo_file.download_to_drive(image_path)
             image_paths.append(image_path)
         
-        # Determine workflow - always use the multi-image workflow
-        wf_path = config.QWEN_8_STEP_I2I_4_INPUTS_PATH
+        # Determine workflow
+        if 'qwen2509cn3' in prompt_text.lower():
+            wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_CONTROLNET_FILE_PATH  
+        elif 'qwen2509cn2' in prompt_text.lower():
+            wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_CONTROLNET_FILE_PATH  
+        elif 'qwen25093' in prompt_text.lower():
+            wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_FILE_PATH    
+        elif 'qwen25092' in prompt_text.lower():
+            wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_FILE_PATH
+        elif 'qwen2509' in prompt_text.lower():
+            wf_path = config.QWEN_2509_4_STEP_I2I_1_INPUT_FILE_PATH 
+        else:
+            wf_path = config.QWEN_8_STEP_I2I_4_INPUTS_PATH
         workflow_name = wf_path.split('/')[-1].split('.')[0]
         
         # Determine model name for Magic Prompt
@@ -1128,6 +1139,7 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
         # Clean prompt text
         if prompt_text:
             prompt_text = re.sub(r'\b(wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+            prompt_text = re.sub(r'qwen2509\w*', '', prompt_text, flags=re.IGNORECASE).strip()
         
         # Create a fake update object for compatibility with existing functions
         # Make sure to include the effective_user with proper id
@@ -1316,8 +1328,8 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             wf_path = config.VIBEVOICE_CLONING_WORKFLOW_PATH  # You'll need to add this to config
             workflow_name = "vibevoice_cloning"
             
-            generated_audio_path, duration_seconds, _ = await asyncio.to_thread(
-                generate_audio,  # You'll need to create this function or modify generate_image
+            generated_audio_path, duration_seconds, seed = await asyncio.to_thread(
+                generate_audio,
                 audio_path=input_audio_path,
                 prompt_text=prompt_text,
                 workflow_path=wf_path,
@@ -1333,6 +1345,7 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     prompt_text,
                     "Voice Cloning",
                     flags,
+                    seed,  # Pass the seed value
                     duration_seconds,
                     workflow_name,
                     nogroup=flags.get('nogroup', False)
@@ -1358,6 +1371,7 @@ async def send_audio_with_logging(
     prompt_text: str,
     workflow_type: str = "Voice Cloning",
     flags=None,
+    seed=None,  # Add seed parameter
     duration_seconds=None,
     workflow_name=None,
     nogroup=False
@@ -1391,6 +1405,7 @@ async def send_audio_with_logging(
         f"Text: {prompt_text}\n\n"
         f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else 'Default'}\n"
         f"Steps: {flags.get('steps') if flags.get('steps') is not None else 'Default'}\n"
+        f"Seed: {flags.get('seed') if flags.get('seed') is not None else seed}\n"
         f"{duration_str}"
         f"{file_size_str}\n\n"
         f"Workflow: {workflow_name}"
@@ -1403,6 +1418,7 @@ async def send_audio_with_logging(
         f"Text: {prompt_text}\n\n"
         f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else 'Default'}\n"
         f"Steps: {flags.get('steps') if flags.get('steps') is not None else 'Default'}\n"
+        f"Seed: {flags.get('seed') if flags.get('seed') is not None else seed}\n"
         f"{duration_str}"
         f"{file_size_str}\n\n"
         f"Workflow: {workflow_name}"
