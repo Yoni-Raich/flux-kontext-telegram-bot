@@ -442,8 +442,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
             text = (
                 f"*📊 ComfyUI Queue Status*\n\n"
-                f"{status_emoji} *Server Status:* {status_text}\n\n"
-                f"*Server Address:* `{config.COMFYUI_SERVER_ADDRESS}`\n\n"
+                f"{status_emoji} *Server Status:* {status_text}\n\n"                
                 f"*Last Updated:* {current_time}\n\n"                
                 f"*What this means:*\n"
                 f"• 🟢 Available: Your request will start immediately\n"
@@ -472,8 +471,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 error_text = (
                     f"*📊 Queue Status*\n\n"
                     f"❌ *Error:* Unable to connect to ComfyUI server\n\n"
-                    f"*Error Details:* `{str(e)}`\n\n"
-                    f"*Server Address:* `{config.COMFYUI_SERVER_ADDRESS}`\n\n"
+                    f"*Error Details:* `{str(e)}`\n\n"                    
                     f"*Possible causes:*\n"
                     f"• ComfyUI server is not running\n"
                     f"• Network connection issues\n"
@@ -512,6 +510,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             error_markup = InlineKeyboardMarkup(error_keyboard)
 
             await query.edit_message_text(error_text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=error_markup)  
+    
     elif callback_data == "help_t2i":
         text = (
             "*📝 Text to Image Generation*\n\n"
@@ -524,15 +523,16 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `qwen4` / `qwen8` \\- QWEN models \\- No need to change steps uses LORAs for 4 and 8 steps\n"
             "• `wan22dslr4` \\- WAN 2\\.2 DSLR Lora \\- no need to change steps uses 4 steps LORA\n\n"
             "*Example:*\n"
-            "```\n"
+            "```shell\n"
             "A photo realistic portrait of a woman\n"
             "```\n"
             "*Change model:*\n"
-            "```\n"
+            "To change a model add the model name from the above options to your prompt\n"
+            "```shell\n"
             "kreawf A cyberpunk cityscape at night\n"
             "```\n"
-            "```\n"
-            "A cyberpunk cityscape at night \\-\\-res 1920x1080 \\-\\-steps 20\n"
+            "```shell\n"
+            "A cyberpunk cityscape at night \\-\\-res 1920x1080 \\-\\-steps 20 \\-\\-qwen8\n"
             "```"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
@@ -553,13 +553,13 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `qwen4` / `qwen8` \\- QWEN model\\, no need to change steps uses LORAs for 4 and 8 steps\n\n"
             "*Example:*\n"
             "Send a photo of your dog with caption:\n"
-            "```\n"
+            "```shell\n"
             "Transform into a painting in Van Gogh style\n"
             "```"
-            "```\n"
+            "```shell\n"
             "kontext Transform into a painting in Van Gogh style\n"
             "```"
-            "```\n"
+            "```shell\n"
             "qwen8 Transform into a painting in Van Gogh style\n"
             "```"
         )
@@ -575,19 +575,25 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `qwen2509cn2` \\- QWEN 2509 \\+ ControlNet \\(2 images\\)\n"
             "• `qwen2509cn3` \\- QWEN 2509 \\+ ControlNet \\(3 images\\)\n"
             "• Default: QWEN 8\\-step with 4 images\n\n"
+            "*ControlNet Flags \\(for cn2/cn3 models\\):*\n"
+            "• `\\-\\-cnopenpose` \\- Use OpenPose ControlNet\n"
+            "• `\\-\\-cndepth` \\- Use Depth ControlNet\n\n"
             "*How to use:*\n"
             "1\\. Select 2\\-4 images from gallery\n"
             "2\\. Add caption: `qwen25093 Combine into surreal art`\n"
             "3\\. Send as group\n\n"
             "*Example:*\n"
             "Send 3 images with caption:\n"
-            "```\n"
+            "```shell\n"
             "qwen25093 the woman from image 1 wears the hoodie from image 2 and holds the bag from image 3\n"
-            "```\n"
+            "```\n\n"
             "*NOTE\\:* when using control net\\, the second image is the reference image for the transformation\n\n"
-            "Example of 2 images with control net\\:\n"
+            "*ControlNet Examples:*\n"
+            "```shell\n"
+            "qwen2509cn2 \\-\\-cnopenpose change pose to match reference\n"
             "```\n"
-            "qwen2509cn2 change pose\n"
+            "```shell\n"
+            "qwen2509cn3 \\-\\-cndepth combine with depth guidance\n"
             "```\n\n"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
@@ -606,10 +612,10 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `fluxmaniaup` \\- FluxMania 2048\n\n"
             "*Usage:*\n"
             "Send image with caption:\n"
-            "```\n"
+            "```shell\n"
             "\\-\\-upscale wan21 enhance this image\n"
             "```\n"
-            "```\n"
+            "```shell\n"
             "\\-\\-upscale\n"
             "```\n\n"
             "*Note:* WAN upscaler may slightly change the image\\. Use low denoise \\(0\\.02\\) for better results\\."
@@ -628,13 +634,24 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "3\\. Bot will clone the voice saying your text\n\n"
             "*Example:*\n"
             "Send voice recording with caption:\n"
-            "```\n"
+            "```shell\n"
             "Hello, this is a test of voice cloning\n"
             "```\n\n"
-            "*Flags:* `\\-\\-seed`, `\\-\\-cfg`, `\\-\\-steps`"
+            "*Available Flags:*\n"
+            "• `\\-\\-seed` \\- Set specific seed for reproducibility\n"
+            "• `\\-\\-cfg` \\- Control guidance scale for audio generation\\. Default is 1\\.7\n"
+            "• `\\-\\-steps` \\- Control generation steps for audio\\. Default is 30\n"
+            "• `\\-\\-temperature X\\.X` \\- Control randomness \\(0\\.0\\-1\\.0\\)\\. Default is 0\\.85\n"
+            "• `\\-\\-top_p X\\.X` \\- Control diversity \\(0\\.0\\-1\\.0\\)\\. Default is 0\\.95\n\n"
+            "*Flag Examples:*\n"
+            "```shell\n"
+            "\\-\\-temperature 0\\.7 \\-\\-top_p 0\\.9 Now u will say what ill tell u to\n"
+            "```\n"
+            "```shell\n"
+            "\\-\\-seed 12345 \\-\\-cfg 1\\.5 Hello world\n"
+            "```"
         )
-        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
-    
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)    
     elif callback_data == "help_flags":
         text = (
             "*⚙️ Flags & Settings*\n\n"
@@ -649,7 +666,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• Landscape: max 1920x1080\n"
             "• Portrait: max 1080x1920\n\n"
             "*Example:*\n"
-            "```\n"
+            "```shell\n"
             "\\-\\-cfg 2\\.5 \\-\\-steps 30 \\-\\-res 1920x1080 landscape photo\n"
             "```"
         )
@@ -1067,6 +1084,36 @@ def parse_prompt_flags(prompt_text):
     if cfg_match:
         flags['cfg'] = float(cfg_match.group(1))
         prompt_text = prompt_text.replace(cfg_match.group(0), '')
+
+    # Extract --temperature flag and value (for audio generation)
+    temperature_match = re.search(r'--temperature\s+([\d.]+)', prompt_text)
+    if temperature_match:
+        temp_val = float(temperature_match.group(1))
+        # Validate range 0.0-1.0
+        if 0.0 <= temp_val <= 1.0:
+            flags['temperature'] = temp_val
+        else:
+            print(f"Warning: temperature value {temp_val} out of range (0.0-1.0), ignoring")
+        prompt_text = prompt_text.replace(temperature_match.group(0), '')
+    
+    # Extract --top_p flag and value (for audio generation)
+    top_p_match = re.search(r'--top_p\s+([\d.]+)', prompt_text)
+    if top_p_match:
+        top_p_val = float(top_p_match.group(1))
+        # Validate range 0.0-1.0
+        if 0.0 <= top_p_val <= 1.0:
+            flags['top_p'] = top_p_val
+        else:
+            print(f"Warning: top_p value {top_p_val} out of range (0.0-1.0), ignoring")
+        prompt_text = prompt_text.replace(top_p_match.group(0), '')  
+
+    # Extract --cnopenpose and --cndepth flags (for ControlNet)
+    if '--cnopenpose' in prompt_text:
+        flags['cnopenpose'] = True
+        prompt_text = prompt_text.replace('--cnopenpose', '')
+    elif '--cndepth' in prompt_text:
+        flags['cndepth'] = True
+        prompt_text = prompt_text.replace('--cndepth', '')          
     
     # Extract --neg flag and value
     neg_match = re.search(r'--neg\s+(.+)', prompt_text)
@@ -1936,6 +1983,8 @@ async def send_audio_with_logging(
         f"Cfg: {flags.get('cfg') if flags.get('cfg') is not None else 'Default'}\n"
         f"Steps: {flags.get('steps') if flags.get('steps') is not None else 'Default'}\n"
         f"Seed: {flags.get('seed') if flags.get('seed') is not None else seed}\n"
+        f"Temperature: {flags.get('temperature') if flags.get('temperature') is not None else 'Default'}\n"
+        f"Top P: {flags.get('top_p') if flags.get('top_p') is not None else 'Default'}\n"
         f"{duration_str}"
         f"{file_size_str}\n\n"
         f"Workflow: {workflow_name}"
