@@ -2,8 +2,9 @@ import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, PicklePersistence
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from telegram.ext import CallbackQueryHandler
 import config
-from bot_handler import start_command, handle_image, help_command, handle_text_prompt, magic_prompt_command, set_bot_commands, handle_audio
+from bot_handler import start_command, handle_image, help_command, handle_text_prompt, magic_prompt_command, set_bot_commands, handle_audio, help_callback_handler
 
 asyncio.get_event_loop().set_default_executor(ThreadPoolExecutor(max_workers=200))
 
@@ -39,6 +40,7 @@ def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("magic", magic_prompt_command))
+    application.add_handler(CallbackQueryHandler(help_callback_handler, pattern="^help_"))
     
     # Register message handlers
     application.add_handler(MessageHandler(filters.AUDIO | filters.VOICE | (filters.Document.AUDIO), handle_audio))

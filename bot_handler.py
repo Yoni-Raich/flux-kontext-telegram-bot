@@ -3,7 +3,7 @@ import logging
 import re
 import asyncio
 import time
-from telegram import Update, BotCommand
+from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from datetime import datetime
@@ -102,13 +102,126 @@ async def magic_prompt_command(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 @authorized
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handles the /help command and displays a detailed help message.
     """
     magic_status = "ON" if context.user_data.get('magic_prompt', True) else "OFF"  # Changed False to True
     magic_available = "✨ Available" if GEMINI_AVAILABLE else "❌ Not Available"
     
+    _help_text = (
+        "*How to Use This Bot:*\n\n"
+        "*__Commands:__*\n"
+        "/start \\- Start the bot and see welcome message\n"
+        "/help \\- Show this help message\n"
+        f"/magic \\- Toggle Magic Prompt \\(Currently: {magic_status}, {magic_available}\\)\n\n"
+        "*__Magic Prompt Feature:__*\n"
+        "Use /magic to toggle automatic prompt enhancement\\. When enabled:\n"
+        "• Text prompts are enhanced with AI for better results\n"
+        "• Image\\+caption prompts are analyzed multimodally \\(both image and text\\) for optimal enhancement\n\n"
+        "*__Image To Image Generation:__*\n"
+        "The default model is Flux1\\-Kontext\\-dev\n\n"
+        "1\\. *Send an Image*: Tap the paperclip icon in the message bar to attach a photo\\.\n"
+        "2\\. *Add a Caption*: Before sending the image, type a description in the 'Add a caption\\.\\.' field\\. This text will be used as the prompt for the new image\\.\n"
+        "3\\. *Send It*: Press send and wait for the magic to happen\\!\n\n"
+        "*Example:*\n"
+        "Send a picture of your dog with the caption: 'A painting in the style of Van Gogh'\n\n"
+        "*Available Flags:*\n"
+        "*\\-\\-steps:*\n Default is 20\\. Controls iteration steps\\.\n\n"
+        "*\\-\\-cfg:*\n Default is 1\\.0\\. Controls Classifier\\-Free Guidance scale\\.\n\n"
+        "*\\-\\-upscale:*\n Will upscale the image x2 Using QWEN model\nFor WAN upscaler add the word wan21 in ur prompt\\(wan upscaler is BETA, currently slightly changes the picture, better to also set a low denoise for the seed 0\\.02\\)\\.\nFor QWEN 2509 upscaler add qwen2509 in ur prompt\\.\n\n"
+        "*\\-\\-seednoise:*\n Sets a specific seed noise for reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"
+        "*\\-\\-upnoise:*\n Sets a specific up noise for upscale reproducibility \\(0\\.0\\-1\\.0\\)\\. \\(Only for WAN Upscaler\\)\n\n"
+        "*Upscale Example:*\n"
+        "Send a picture and in the caption either:"
+        "```\n"
+        "\\-\\-upscale"
+        "```\n\n"
+        "```\n"
+        "\\-\\-upscale A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "*__Multi\\-Image Generation:__*\n"
+        "Send 2\\-4 images together with a caption to generate using multiple input images\\.\n"
+        "*Available Multi\\-Image Models:*\n"
+        "• *qwen25092* \\- QWEN 2509 with 2 image inputs\n"
+        "• *qwen25093* \\- QWEN 2509 with 3 image inputs\n"
+        "• *qwen2509cn2* \\- QWEN 2509 with 2 images \\+ ControlNet\n"
+        "• *qwen2509cn3* \\- QWEN 2509 with 3 images \\+ ControlNet\n"
+        "• Default: QWEN 8\\-step with 4 image inputs\n\n"
+        "*Multi\\-Image Example:*\n"
+        "1\\. Select 2\\-4 images from your gallery\n"
+        "2\\. Add caption: 'qwen25093 Combine these images into a surreal landscape'\n"
+        "3\\. Send the image group\n\n"
+        "*__Voice Cloning \\(Audio Generation\\):__*\n"
+        "Send an audio file with a caption to clone the voice and generate new speech\\.\n"
+        "*Supported Audio Formats:*\n"
+        "mp3, wav, m4a, ogg, flac, aiff, webm, voice messages\n\n"
+        "*Audio Example:*\n"
+        "1\\. Send an audio file \\(or record a voice message\\)\n"
+        "2\\. Add caption: 'Hello, this is a test of voice cloning technology'\n"
+        "3\\. The bot will generate audio with the same voice saying your text\n\n"
+        "*Available Audio Flags:*\n"
+        "*\\-\\-seed:* Sets a specific seed for reproducibility\n"
+        "*\\-\\-cfg:* Controls guidance scale for audio generation\n"
+        "*\\-\\-steps:* Controls generation steps for audio\n\n"
+        "*__Text To Image Generation:__*\n"
+        "Simply send me a prompt\\. The default model is WAN2\\.1\n"
+        "*Example:*\n"
+        "```\n"
+        "A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "*Available Flags:*\n"
+        "*\\-\\-steps:*\n Default is 20 for Krea and Flux models, 10 for WAN2\\.1\\. 4 and 8 for QWEN\\(no need to increase on these flows\\)\\. Controls iteration steps\\.\n\n"
+        "*\\-\\-cfg:*\n Default is 1\\.0\\. Controls Classifier\\-Free Guidance scale\\.\n\n"
+        "*\\-\\-res:*\n Default resolution is 1024x1024, maximum resolution is 1920x1080\n\n"
+        "*\\-\\-neg:*\n Controls the negative prompt for image generation\\. \\(Only for Wan model\\)\n\n"
+        "*\\-\\-seed:*\n Sets a specific seed for reproducibility\\.\n\n"
+        "*\\-\\-seednoise:*\n Sets a specific seed noise for reproducibility \\(0\\.0\\-1\\.0\\)\\.\n\n"        
+        "*Using Other Models:*\n"
+        "Add 'wan22dslr4' before your prompt to use WAN 2\\.2 4\\-Steps DSLR Lora model\\:\n"
+        "```\n"
+        "wan22dslr4 A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "Add 'qwen4' or 'qwen8' before your prompt to use Qwen model\\:\n"
+        "```\n"
+        "qwen4 A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "Add 'kreawf' before your prompt to use Krea model\\:\n"
+        "```\n"
+        "kreawf A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "*Additional Upscaler Models:*\n"
+        "• *nunchakuflux* \\- Nunchaku Flux Upscaler\n"
+        "• *nnchflxasd* \\- Flux Nunchaku Upscaler ASD\n"
+        "• *fluxmaniaup* \\- FluxMania Upscaler 2048\n\n"
+        "*Examples with Flags:*\n"
+        "With steps:\n"
+        "```\n"
+        "\\-\\-steps 30 A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "With cfg:\n"
+        "```\n"
+        "\\-\\-cfg 2\\.5 A photo realistic portrait of a blonde hair nordic woman"
+        "```\n\n"
+        "With both flags:\n"
+        "```\n"
+        "\\-\\-cfg 2\\.5 \\-\\-steps 30 A photo realistic portrait of a blonde hair nordic woman\n"
+        "```\n\n"
+        "With Krea model and flags:\n"
+        "```\n"
+        "kreawf \\-\\-cfg 2\\.5 \\-\\-steps 30 A photo realistic portrait of a blonde hair nordic woman\n"
+        "```\n\n"
+        "With res flag:\n"
+        "```\n"
+        "\\-\\-cfg 2\\.5 \\-\\-steps 30 \\-\\-res 1920x1080 A photo realistic portrait of a blonde hair nordic woman\n"
+        "```\n\n"
+        "With neg flag:\n"
+        "```\n"
+        "A photo realistic portrait of a blonde hair nordic woman \\-\\-neg blur, cartoon, historical"
+        "```\n\n"
+    )
+
+
     help_text = (
         "*How to Use This Bot:*\n\n"
         "*__Commands:__*\n"
@@ -192,7 +305,265 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "A photo realistic portrait of a blonde hair nordic woman \\-\\-neg blur, cartoon, historical"
         "```\n\n"
     )
+    
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN_V2)
+
+
+@authorized
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handles the /help command and displays an interactive help menu.
+    """
+    magic_status = "ON" if context.user_data.get('magic_prompt', True) else "OFF"
+    magic_available = "✨ Available" if GEMINI_AVAILABLE else "❌ Not Available"
+    
+    help_intro = (
+        f"*Welcome to the AI Image Generation Bot\\!*\n\n"
+        f"🤖 *Magic Prompt:* Currently {magic_status} \\({magic_available}\\)\n\n"
+        f"*Choose a topic below for detailed help:*"
+    )
+    
+    # Create inline keyboard buttons
+    keyboard = [
+        [
+            InlineKeyboardButton("📝 Text to Image", callback_data="help_t2i"),
+            InlineKeyboardButton("🖼️ Image to Image", callback_data="help_i2i")
+        ],
+        [
+            InlineKeyboardButton("📸 Multi-Image", callback_data="help_multi"),
+            InlineKeyboardButton("🔍 Upscalers", callback_data="help_upscale")
+        ],
+        [
+            InlineKeyboardButton("🎵 Voice Cloning", callback_data="help_audio"),
+            InlineKeyboardButton("⚙️ Flags & Settings", callback_data="help_flags")
+        ],
+        [
+            InlineKeyboardButton("🧙‍♂️ Magic Prompt", callback_data="help_magic"),
+            InlineKeyboardButton("🏠 Main Menu", callback_data="help_main")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        help_intro, 
+        parse_mode=ParseMode.MARKDOWN_V2, 
+        reply_markup=reply_markup
+    )
+
+# Add this new callback handler function:
+async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline keyboard callbacks for help menu."""
+    query = update.callback_query
+    await query.answer()
+    
+    callback_data = query.data
+    
+    # Create back button
+    back_keyboard = [[InlineKeyboardButton("🔙 Back to Help Menu", callback_data="help_main")]]
+    back_markup = InlineKeyboardMarkup(back_keyboard)
+    
+    if callback_data == "help_main":
+        # Show main help menu again
+        magic_status = "ON" if context.user_data.get('magic_prompt', True) else "OFF"
+        magic_available = "✨ Available" if GEMINI_AVAILABLE else "❌ Not Available"
+        
+        help_intro = (
+            f"*Welcome to the AI Image Generation Bot\\!*\n\n"
+            f"🤖 *Magic Prompt:* Currently {magic_status} \\({magic_available}\\)\n\n"
+            f"*Choose a topic below for detailed help:*"
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("📝 Text to Image", callback_data="help_t2i"),
+                InlineKeyboardButton("🖼️ Image to Image", callback_data="help_i2i")
+            ],
+            [
+                InlineKeyboardButton("📸 Multi-Image", callback_data="help_multi"),
+                InlineKeyboardButton("🔍 Upscalers", callback_data="help_upscale")
+            ],
+            [
+                InlineKeyboardButton("🎵 Voice Cloning", callback_data="help_audio"),
+                InlineKeyboardButton("⚙️ Flags & Settings", callback_data="help_flags")
+            ],
+            [
+                InlineKeyboardButton("🧙‍♂️ Magic Prompt", callback_data="help_magic")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            help_intro,
+            parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=reply_markup
+        )
+    
+    elif callback_data == "help_t2i":
+        text = (
+            "*📝 Text to Image Generation*\n\n"
+            "Simply send me a text prompt to generate an image\\. Default model is WAN2\\.1\\.\n\n"
+            "*Available Models:*\n"
+            "• Default: WAN2\\.1 \\- Default 10 steps\n"
+            "• `kreawf` \\- Flux1\\-Krea\\-dev \\- Default 20 steps\n"
+            "• `kreasmp` \\- Krea simplified \\- Default 20 steps\n"
+            "• `kontext` \\- Flux1\\-Kontext\\-dev \\- Default 20 steps\n"
+            "• `qwen4` / `qwen8` \\- QWEN models \\- No need to change steps uses LORAs for 4 and 8 steps\n"
+            "• `wan22dslr4` \\- WAN 2\\.2 DSLR Lora \\- no need to change steps uses 4 steps LORA\n\n"
+            "*Example:*\n"
+            "```\n"
+            "A photo realistic portrait of a woman\n"
+            "```\n"
+            "*Change model:*\n"
+            "```\n"
+            "kreawf A cyberpunk cityscape at night\n"
+            "```\n"
+            "```\n"
+            "A cyberpunk cityscape at night \\-\\-res 1920x1080 \\-\\-steps 20\n"
+            "```"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
+    
+    elif callback_data == "help_i2i":
+        text = (
+            "*🖼️ Image to Image Generation*\n\n"
+            "Send an image with a caption to transform it\\. Default model is Flux1\\-Kontext\\-dev\\.\n\n"
+            "*How to use:*\n"
+            "1\\. Tap the paperclip icon\n"
+            "2\\. Select an image\n"
+            "3\\. Add a caption describing the transformation\n"
+            "4\\. Send\\!\n\n"
+            "*Available Models:*\n"
+            "• Default: QWEN Edit 2509 \\- 4 steps LORA\n\n"
+            "• `kontext` \\- FLUX Kontext Dev\n"
+            "   default steps are 20\n\n"
+            "• `qwen4` / `qwen8` \\- QWEN model\\, no need to change steps uses LORAs for 4 and 8 steps\n\n"
+            "*Example:*\n"
+            "Send a photo of your dog with caption:\n"
+            "```\n"
+            "Transform into a painting in Van Gogh style\n"
+            "```"
+            "```\n"
+            "kontext Transform into a painting in Van Gogh style\n"
+            "```"
+            "```\n"
+            "qwen8 Transform into a painting in Van Gogh style\n"
+            "```"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
+    
+    elif callback_data == "help_multi":
+        text = (
+            "*📸 Multi\\-Image Generation*\n\n"
+            "Send 2\\-4 images together with a caption to generate using multiple inputs\\.\n\n"
+            "*Available Models:*\n"
+            "• `qwen25092` \\- QWEN 2509 with 2 images\n"
+            "• `qwen25093` \\- QWEN 2509 with 3 images\n"
+            "• `qwen2509cn2` \\- QWEN 2509 \\+ ControlNet \\(2 images\\)\n"
+            "• `qwen2509cn3` \\- QWEN 2509 \\+ ControlNet \\(3 images\\)\n"
+            "• Default: QWEN 8\\-step with 4 images\n\n"
+            "*How to use:*\n"
+            "1\\. Select 2\\-4 images from gallery\n"
+            "2\\. Add caption: `qwen25093 Combine into surreal art`\n"
+            "3\\. Send as group\n\n"
+            "*Example:*\n"
+            "Send 3 images with caption:\n"
+            "```\n"
+            "qwen25093 the woman from image 1 wears the hoodie from image 2 and holds the bag from image 3\n"
+            "```\n"
+            "*NOTE\\:* when using control net\\, the second image is the reference image for the transformation\n\n"
+            "Example of 2 images with control net\\:\n"
+            "```\n"
+            "qwen2509cn2 change pose\n"
+            "```\n\n"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
+    
+    elif callback_data == "help_upscale":
+        text = (
+            "*🔍 Upscaler Models*\n\n"
+            "Use `\\-\\-upscale` flag with an image to upscale 2x\\.\n\n"
+            "*Available Upscalers:*\n"
+            "• Default: QWEN Upscaler\n"
+            "    \\-\\-chngsmp for QWEN upscaler to change sampler type\n\n"
+            "• `wan21` \\- WAN 2\\.1 Upscaler \\(Beta \\- takes longer approx 5 min\\)\n"
+            "    Additional flags example:\n    \\-\\-upnoise 0\\.1 \\-\\-seednoise 0\\.02\n for wan21 upscaler\n\n"
+            "• `nunchakuflux` \\- Nunchaku Flux\n"
+            "• `nnchflxasd` \\- Flux Nunchaku ASD\n"
+            "• `fluxmaniaup` \\- FluxMania 2048\n\n"
+            "*Usage:*\n"
+            "Send image with caption:\n"
+            "```\n"
+            "\\-\\-upscale wan21 enhance this image\n"
+            "```\n"
+            "```\n"
+            "\\-\\-upscale\n"
+            "```\n\n"
+            "*Note:* WAN upscaler may slightly change the image\\. Use low denoise \\(0\\.02\\) for better results\\."
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
+    
+    elif callback_data == "help_audio":
+        text = (
+            "*🎵 Voice Cloning*\n\n"
+            "Send an audio file with a caption to clone the voice\\.\n\n"
+            "*Supported Formats:*\n"
+            "mp3, wav, m4a, ogg, flac, aiff, webm, voice messages\n\n"
+            "*How to use:*\n"
+            "1\\. Send an audio file or record voice message\n"
+            "2\\. Add caption with text to generate\n"
+            "3\\. Bot will clone the voice saying your text\n\n"
+            "*Example:*\n"
+            "Send voice recording with caption:\n"
+            "```\n"
+            "Hello, this is a test of voice cloning\n"
+            "```\n\n"
+            "*Flags:* `\\-\\-seed`, `\\-\\-cfg`, `\\-\\-steps`"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
+    
+    elif callback_data == "help_flags":
+        text = (
+            "*⚙️ Flags & Settings*\n\n"
+            "*Common Flags:*\n"
+            "• \\-\\-steps X \\- Number of generation steps\n"
+            "• \\-\\-cfg X\\.X \\- Classifier\\-Free Guidance scale\n"
+            "• \\-\\-seed XXXXX \\- Specific seed for reproducibility\n"
+            "• \\-\\-res WIDTHxHEIGHT \\- Custom resolution\n"
+            "• \\-\\-neg text \\- Negative prompt \\(WAN only\\)\n\n"
+            "*Resolution Limits:*\n"
+            "• Square \\(1:1\\): max 1400x1400\n"
+            "• Landscape: max 1920x1080\n"
+            "• Portrait: max 1080x1920\n\n"
+            "*Example:*\n"
+            "```\n"
+            "\\-\\-cfg 2\\.5 \\-\\-steps 30 \\-\\-res 1920x1080 landscape photo\n"
+            "```"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
+    
+    elif callback_data == "help_magic":
+        magic_status = "ON" if context.user_data.get('magic_prompt', True) else "OFF"
+        magic_available = "✨ Available" if GEMINI_AVAILABLE else "❌ Not Available"
+        
+        text = (
+            f"*🧙‍♂️ Magic Prompt Feature*\n\n"
+            f"*Status:* {magic_status} \\({magic_available}\\)\n\n"
+            f"*What it does:*\n"
+            f"• Automatically enhances your prompts using AI\n"
+            f"• Analyzes images \\+ text for multimodal enhancement\n"
+            f"• Improves generation quality and detail\n\n"
+            f"*Commands:*\n"
+            f"• /magic \\- Toggle on/off\n\n"
+            f"*How it works:*\n"
+            f"• Text prompts: Enhanced for better results\n"
+            f"• Image\\+caption: Both analyzed together\n"
+            f"• Automatic negative prompt generation\n\n"
+            f"*Note:* When enabled, you'll see enhancement messages before generation starts\\."
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
+
+
 
 
 def determine_model_name(prompt_text, flags, is_image_to_image=False):
@@ -289,7 +660,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif prompt_text and 'nnchflxasd' in prompt_text.lower():
             wf_path = config.FLUX_NUNCHAKU_UPSCALER_ASD_PATH
         elif prompt_text and 'fluxmaniaup' in prompt_text.lower():
-            wf_path = config.FLUXMANIA_UPSCALER_2048_FILE_PATH
+            wf_path = config.FLUXMANIA_UPSCALER_2048_FILE_PATH                     
         else:
             wf_path = config.QWEN_UPSCALER_FILE_PATH
     elif 'simpleup' in flags:
@@ -300,8 +671,10 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wf_path = config.QWEN_4_STEP_I2I_FILE_PATH
     elif 'qwen8' in prompt_text.lower():
         wf_path = config.QWEN_8_STEP_I2I_FILE_PATH
+    elif 'qwen2509' in prompt_text.lower():
+        wf_path = config.QWEN_2509_4_STEP_I2I_1_INPUT_FILE_PATH
     else:
-        wf_path = config.I2I_WORKFLOW_FILE_PATH
+        wf_path = config.QWEN_2509_4_STEP_I2I_1_INPUT_FILE_PATH
 
     logger.info(f'\n\nwf path: {wf_path}\n\n')
     workflow_name = wf_path.split('/')[-1].split('.')[0]
@@ -313,6 +686,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if prompt_text:
         prompt_text = re.sub(r'\b(wan21|qwen4|qwen8|nunchakuflux|fluxmaniaup|nnchflxasd)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+        prompt_text = re.sub(r'qwen2509\w*', '', prompt_text, flags=re.IGNORECASE).strip()
     async def process_and_respond(): 
         nonlocal prompt_text, neg_prompt_text 
         # Check if Magic Prompt is enabled for this user - using multimodal enhancement
@@ -498,7 +872,7 @@ async def set_bot_commands(application):
     ]
     await application.bot.set_my_commands(commands)
 
-async def handle_resize(value, update):
+async def _handle_resize(value, update):
     """
     Handle the resize value from the prompt.
     Returns a tuple of (width, height) or None if invalid.
@@ -512,6 +886,51 @@ async def handle_resize(value, update):
                 )
         except ValueError:
             print(f"Invalid resize value: {value}")
+
+
+
+async def handle_resize(value, update):
+    """
+    Handle the resize value from the prompt.
+    Returns a tuple of (width, height) or None if invalid.
+    """
+    if value:
+        try:
+            width, height = map(int, value.split('x'))
+            if (width <= 0 or height <= 0):
+                await update.message.reply_text(
+                    "Minimum resolution cannot be 0, setting values to default 1024x1024"
+                )
+                return
+            
+            # Skip limits for specific user
+            if update.effective_user.id == 374504771:
+                return
+                
+            # Check aspect ratio and apply appropriate limits
+            aspect_ratio = width / height
+            
+            # Square aspect ratio (1:1) - allow up to 1400x1400
+            if 0.9 <= aspect_ratio <= 1.1:  # Allow some tolerance for square
+                if width > 1400 or height > 1400:
+                    await update.message.reply_text(
+                        "Maximum resolution for square (1:1) aspect ratio is 1400x1400, setting values to default 1024x1024"
+                    )
+            # Landscape aspect ratio - allow up to 1920x1080
+            elif aspect_ratio > 1.1:
+                if width > 1920 or height > 1080:
+                    await update.message.reply_text(
+                        "Maximum resolution for landscape is 1920x1080, setting values to default 1024x1024"
+                    )
+            # Portrait aspect ratio - allow up to 1080x1920
+            else:  # aspect_ratio < 0.9
+                if width > 1080 or height > 1920:
+                    await update.message.reply_text(
+                        "Maximum resolution for portrait is 1080x1920, setting values to default 1024x1024"
+                    )
+                    
+        except ValueError:
+            print(f"Invalid resize value: {value}")            
 
 def parse_prompt_flags(prompt_text):
     import re
@@ -1113,8 +1532,6 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
             wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_FILE_PATH    
         elif 'qwen25092' in prompt_text.lower():
             wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_FILE_PATH
-        elif 'qwen2509' in prompt_text.lower():
-            wf_path = config.QWEN_2509_4_STEP_I2I_1_INPUT_FILE_PATH 
         else:
             wf_path = config.QWEN_8_STEP_I2I_4_INPUTS_PATH
         workflow_name = wf_path.split('/')[-1].split('.')[0]

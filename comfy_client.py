@@ -257,7 +257,7 @@ def update_sampler(workflow, node_id):
         print(f"Node ID {node_id} not found in workflow.")
 
 
-def set_resize(workflow, node_id, width, height, allow_resize=False):
+def _set_resize(workflow, node_id, width, height, allow_resize=False):
     """
     Set the resize value for the prompt.
     Returns a string in the format 'widthxheight'.
@@ -272,6 +272,59 @@ def set_resize(workflow, node_id, width, height, allow_resize=False):
     except Exception as e:
         print(f"Invalid width value: {width}")
         print(f"Error: {e}")
+
+
+
+def set_resize(workflow, node_id, width, height, allow_resize=False):
+    """
+    Set the resize value for the prompt.
+    Applies aspect ratio-based resolution limits.
+    """
+    try:
+        if allow_resize:
+            # Skip limits for specific users
+            workflow[node_id]['inputs']['width'] = width
+            workflow[node_id]['inputs']['height'] = height
+            return
+        
+        # Calculate aspect ratio
+        aspect_ratio = width / height
+        
+        # Check aspect ratio and apply appropriate limits
+        # Square aspect ratio (1:1) - allow up to 1400x1400
+        if 0.9 <= aspect_ratio <= 1.1:  # Allow some tolerance for square
+            if width > 1400 or height > 1400:
+                workflow[node_id]['inputs']['width'] = 1024
+                workflow[node_id]['inputs']['height'] = 1024
+                print(f"Resolution {width}x{height} exceeds square limit (1400x1400), using 1024x1024")
+            else:
+                workflow[node_id]['inputs']['width'] = width
+                workflow[node_id]['inputs']['height'] = height
+        # Landscape aspect ratio - allow up to 1920x1080
+        elif aspect_ratio > 1.1:
+            if width > 1920 or height > 1080:
+                workflow[node_id]['inputs']['width'] = 1024
+                workflow[node_id]['inputs']['height'] = 1024
+                print(f"Resolution {width}x{height} exceeds landscape limit (1920x1080), using 1024x1024")
+            else:
+                workflow[node_id]['inputs']['width'] = width
+                workflow[node_id]['inputs']['height'] = height
+        # Portrait aspect ratio - allow up to 1080x1920
+        else:  # aspect_ratio < 0.9
+            if width > 1080 or height > 1920:
+                workflow[node_id]['inputs']['width'] = 1024
+                workflow[node_id]['inputs']['height'] = 1024
+                print(f"Resolution {width}x{height} exceeds portrait limit (1080x1920), using 1024x1024")
+            else:
+                workflow[node_id]['inputs']['width'] = width
+                workflow[node_id]['inputs']['height'] = height
+                
+    except Exception as e:
+        print(f"Invalid width/height values: {width}x{height}")
+        print(f"Error: {e}")
+        # Set defaults on error
+        workflow[node_id]['inputs']['width'] = 1024
+        workflow[node_id]['inputs']['height'] = 1024
 
         
 
