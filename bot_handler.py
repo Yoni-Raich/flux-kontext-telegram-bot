@@ -31,6 +31,9 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+
+
+
 # --- Authorization Decorator ---
 def authorized(func):
     """
@@ -53,6 +56,30 @@ def is_active_hours():
     hour = now.hour
     # Active if hour >= ACTIVE_HOUR_START or hour < ACTIVE_HOUR_END
     return hour >= ACTIVE_HOUR_START or hour < ACTIVE_HOUR_END
+
+
+def cleanup_comfyui_files_async(prompt_id, generated_file_path=None):
+    """
+    Clean up ComfyUI output files asynchronously in the background.
+    
+    Args:
+        prompt_id: The ComfyUI prompt ID to clean up
+    """
+    if prompt_id:
+        try:
+            from comfy_client import cleanup_comfyui_outputs
+            asyncio.create_task(asyncio.to_thread(
+                cleanup_comfyui_outputs, 
+                prompt_id, 
+                config.COMFYUI_SERVER_ADDRESS,
+                config.COMFYUI_OUTPUT_DIR
+            ))
+
+            if generated_file_path and os.path.exists(generated_file_path):
+                asyncio.create_task(asyncio.to_thread(os.remove, generated_file_path))
+                logger.info(f"Scheduled cleanup of local file: {generated_file_path}")
+        except Exception as e:
+            logger.error(f"Error during ComfyUI cleanup: {e}")
 
 # --- Command Handlers ---
 @authorized
@@ -743,7 +770,9 @@ def determine_model_name(prompt_text, flags, is_image_to_image=False):
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handles incoming images with captions.
-    """
+    """        
+    if  update.edited_message:
+        return
     # Check if this is part of a media group (multiple images)
     if update.message.media_group_id:
         return await handle_media_group(update, context)
@@ -833,7 +862,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await check_pending_jobs(update)    
         try:
-            generated_image_path, duration_seconds, seed = await asyncio.to_thread(
+            generated_image_path, duration_seconds, seed, prompt_id = await asyncio.to_thread(
             generate_image,
             image_path=input_image_path,
             prompt_text=prompt_text,
@@ -858,6 +887,9 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     workflow_name=workflow_name,
                     nogroup=flags.get('nogroup', False)
                 )
+                
+                # Clean up ComfyUI output files after successful sending
+                cleanup_comfyui_files_async(prompt_id, generated_image_path)
             else:
                 raise FileNotFoundError("The generated image file was not found.")
 
@@ -950,7 +982,7 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await handle_resize(value=flags.get('resize')  if flags.get('resize') else None, update=update)
         
         try:            
-            generated_image_path, duration_seconds, seed = await asyncio.to_thread(
+            generated_image_path, duration_seconds, seed, prompt_id = await asyncio.to_thread(
             generate_image,
             image_path=None,
             prompt_text=prompt_text,
@@ -981,6 +1013,9 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     workflow_name,
                     nogroup=flags.get('nogroup', False)
                 )
+                
+                # Clean up ComfyUI output files after successful sending
+                cleanup_comfyui_files_async(prompt_id, generated_image_path)
             else:
                 raise FileNotFoundError("The generated image file was not found.")
 
@@ -1520,7 +1555,7 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
         
     try:
         if image_path:  # Image-to-image
-            generated_image_path, duration_seconds, seed = await asyncio.to_thread(
+            generated_image_path, duration_seconds, seed, prompt_id = await asyncio.to_thread(
                 generate_image,
                 image_path=image_path,
                 prompt_text=prompt_text,
@@ -1532,7 +1567,7 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
                 allow_resize=update.effective_user.id == config.MY_USER_ID
             )
         else:  # Text-to-image
-            generated_image_path, duration_seconds, seed = await asyncio.to_thread(
+            generated_image_path, duration_seconds, seed, prompt_id = await asyncio.to_thread(
                 generate_image,
                 image_path=None,
                 prompt_text=prompt_text,
@@ -1566,8 +1601,11 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
                 duration_seconds,
                 workflow_name,
                 nogroup=flags.get('nogroup', False),
-                ai_model_name=ai_model_name  # Pass the AI model name to the logging function
+                ai_model_name=ai_model_name
             )
+            
+            # Clean up ComfyUI output files after successful sending
+            cleanup_comfyui_files_async(prompt_id, generated_image_path)
         else:
             raise FileNotFoundError("The generated image file was not found.")
 
@@ -1759,7 +1797,7 @@ async def generate_multi_image_task(update, context, prompt_text, negative_promp
     start_time = datetime.now()
     
     try:
-        generated_image_path, duration_seconds, seed = await asyncio.to_thread(
+        generated_image_path, duration_seconds, seed, prompt_id = await asyncio.to_thread(
             generate_image,
             image_path=None,  # Not used for multi-image
             image_paths=image_paths,  # Use the new parameter
@@ -1795,6 +1833,9 @@ async def generate_multi_image_task(update, context, prompt_text, negative_promp
                 nogroup=flags.get('nogroup', False),
                 ai_model_name=ai_model_name
             )
+            
+            # Clean up ComfyUI output files after successful sending
+            cleanup_comfyui_files_async(prompt_id, generated_image_path)
         else:
             raise FileNotFoundError("The generated image file was not found.")
 
@@ -1900,12 +1941,13 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Process the audio
     async def process_and_respond():
+        await check_pending_jobs(update)  # Add this line to check for pending jobs
         try:
             # Use the VibeVoice workflow
-            wf_path = config.VIBEVOICE_CLONING_WORKFLOW_PATH  # You'll need to add this to config
+            wf_path = config.VIBEVOICE_CLONING_WORKFLOW_PATH
             workflow_name = "vibevoice_cloning"
             
-            generated_audio_path, duration_seconds, seed = await asyncio.to_thread(
+            generated_audio_path, duration_seconds, seed, prompt_id = await asyncio.to_thread(
                 generate_audio,
                 audio_path=input_audio_path,
                 prompt_text=prompt_text,
@@ -1927,6 +1969,9 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     workflow_name,
                     nogroup=flags.get('nogroup', False)
                 )
+                
+                # Clean up ComfyUI output files after successful sending
+                cleanup_comfyui_files_async(prompt_id, generated_audio_path)
             else:
                 raise FileNotFoundError("The generated audio file was not found.")
 

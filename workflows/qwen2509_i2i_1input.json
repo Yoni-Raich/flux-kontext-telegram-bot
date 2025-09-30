@@ -2,7 +2,7 @@
   "3": {
     "inputs": {
       "seed": 1125899906842624,
-      "steps": 4,
+      "steps": 8,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
@@ -193,7 +193,7 @@
       },
       "lora_1": {
         "on": true,
-        "lora": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+        "lora": "Qwen-Image-Edit-Lightning-8steps-V1.0.safetensors",
         "strength": 1
       },
       "➕ Add Lora": "",

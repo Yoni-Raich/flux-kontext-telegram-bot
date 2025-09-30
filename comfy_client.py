@@ -135,6 +135,9 @@ def generate_image(prompt_text: str,
     # Update resolution if provided
     update_resolution(workflow, resize_resolution, allow_resize)
 
+    # Update ControlNet switch if flags are present
+    update_controlnet_switch(workflow, flags or {})    
+
     # Handle image assignment to LoadImage nodes
     if uploaded_filenames:
         if len(uploaded_filenames) > 1:
@@ -210,7 +213,7 @@ def generate_image(prompt_text: str,
 
     if prompt_id not in history:
         print("Prompt ID not found in history.\n\n")
-        return None, None, None
+        return None, None, None, None
 
     prompt_history = history[prompt_id]
 
@@ -240,10 +243,10 @@ def generate_image(prompt_text: str,
             f.write(image_data)
         
         print(f"Image saved to: {final_image_path}\n\n")
-        return os.path.abspath(final_image_path), duration, seed_val
+        return os.path.abspath(final_image_path), duration, seed_val, prompt_id
     else:
         print("Output image not found in history.\n\n")
-        return None, None, None
+        return None, None, None, None
     
 
 def update_sampler(workflow, node_id):
@@ -682,8 +685,143 @@ def generate_audio(
         if not output_audio:
             raise Exception("No audio output found in workflow results")
         
-        return output_audio, duration, seed_val  # Return the actual seed used
+        return output_audio, duration, seed_val, prompt_id
         
     except Exception as e:
         print(f"Error in generate_audio: {e}")
         raise e
+    
+
+
+def update_controlnet_switch(workflow, flags):
+    """Update ControlNet switch based on flags."""
+    # Find the Switch any [Crystools] node for ControlNet
+    switch_node = None
+    for node_id, node_data in workflow.items():
+        if (node_data.get('class_type') == 'Switch any [Crystools]' and
+            'TRUE ---> OPENPOSE     FALSE ---> DEPTH' in node_data.get('_meta', {}).get('title', '')):
+            switch_node = node_id
+            break
+    
+    if switch_node:
+        if flags.get('cnopenpose'):
+            workflow[switch_node]["inputs"]["boolean"] = True
+            print(f"Set ControlNet to OPENPOSE mode (boolean=True)")
+        elif flags.get('cndepth'):
+            workflow[switch_node]["inputs"]["boolean"] = False
+            print(f"Set ControlNet to DEPTH mode (boolean=False)")
+        else:
+            # Default behavior - you can set a default here
+            print(f"No ControlNet flag specified, using default")
+    else:
+        print("Warning: ControlNet Switch node not found in workflow")
+
+
+def extract_comfyui_output_files(history_data, comfyui_output_dir="D:\\Repos\\ComfyUI_venv\\ComfyUI\\output"):
+    """
+    Extract output file paths from ComfyUI history data.
+    
+    Args:
+        history_data: The history data from ComfyUI API
+        comfyui_output_dir: Path to ComfyUI output directory
+    
+    Returns:
+        list: List of absolute file paths to delete
+    """
+    files_to_delete = []
+    
+    outputs = history_data.get('outputs', {})
+    
+    for node_id, node_output in outputs.items():
+        # Handle image outputs
+        if 'images' in node_output:
+            for image_info in node_output['images']:
+                filename = image_info['filename']
+                subfolder = image_info.get('subfolder', '')
+                img_type = image_info.get('type', 'output')
+                
+                if img_type == 'output':  # Only delete actual output files, not temp files
+                    if subfolder:
+                        file_path = os.path.join(comfyui_output_dir, subfolder, filename)
+                    else:
+                        file_path = os.path.join(comfyui_output_dir, filename)
+                    files_to_delete.append(file_path)
+        
+        # Handle audio outputs
+        if 'audio' in node_output:
+            for audio_info in node_output['audio']:
+                filename = audio_info['filename']
+                subfolder = audio_info.get('subfolder', '')
+                audio_type = audio_info.get('type', 'output')
+                
+                if audio_type == 'output':  # Only delete actual output files, not temp files
+                    if subfolder:
+                        file_path = os.path.join(comfyui_output_dir, subfolder, filename)
+                    else:
+                        file_path = os.path.join(comfyui_output_dir, filename)
+                    files_to_delete.append(file_path)
+    
+    return files_to_delete
+
+def delete_comfyui_files(file_paths):
+    """
+    Delete files from ComfyUI output directory.
+    
+    Args:
+        file_paths: List of file paths to delete
+    """
+    deleted_files = []
+    failed_files = []
+    
+    for file_path in file_paths:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                deleted_files.append(file_path)
+                print(f"Deleted ComfyUI output file: {file_path}")
+            else:
+                print(f"File not found (already deleted?): {file_path}")
+        except Exception as e:
+            failed_files.append((file_path, str(e)))
+            print(f"Failed to delete {file_path}: {e}")
+    
+    if deleted_files:
+        print(f"Successfully deleted {len(deleted_files)} ComfyUI output files")
+    if failed_files:
+        print(f"Failed to delete {len(failed_files)} files")
+    
+    return deleted_files, failed_files
+
+def cleanup_comfyui_outputs(prompt_id, server_address, comfyui_output_dir="D:\\Repos\\ComfyUI_venv\\ComfyUI\\output"):
+    """
+    Clean up ComfyUI output files for a given prompt ID.
+    
+    Args:
+        prompt_id: The ComfyUI prompt ID
+        server_address: ComfyUI server address
+        comfyui_output_dir: Path to ComfyUI output directory
+    """
+    try:
+        # Get history from ComfyUI
+        history_url = f"http://{server_address}/history/{prompt_id}"
+        with urllib.request.urlopen(history_url) as response:
+            history = json.loads(response.read())
+        
+        if prompt_id not in history:
+            print(f"Prompt ID {prompt_id} not found in history for cleanup")
+            return
+        
+        history_data = history[prompt_id]
+        
+        # Extract output files
+        files_to_delete = extract_comfyui_output_files(history_data, comfyui_output_dir)
+        
+        if files_to_delete:
+            print(f"Found {len(files_to_delete)} ComfyUI output files to delete")
+            # Delete the files
+            delete_comfyui_files(files_to_delete)
+        else:
+            print("No ComfyUI output files found to delete")
+            
+    except Exception as e:
+        print(f"Error during ComfyUI cleanup: {e}")
