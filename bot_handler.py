@@ -58,7 +58,7 @@ def is_active_hours():
     return hour >= ACTIVE_HOUR_START or hour < ACTIVE_HOUR_END
 
 
-def cleanup_comfyui_files_async(prompt_id, generated_file_path=None):
+def cleanup_comfyui_files_async(prompt_id, generated_file_path=None, image_paths=None):
     """
     Clean up ComfyUI output files asynchronously in the background.
     
@@ -80,6 +80,10 @@ def cleanup_comfyui_files_async(prompt_id, generated_file_path=None):
                 logger.info(f"Scheduled cleanup of local file: {generated_file_path}")
         except Exception as e:
             logger.error(f"Error during ComfyUI cleanup: {e}")
+    if image_paths:
+        for img_path in image_paths:
+            a = os.path.join(config.COMFYUI_INPUT_DIR, img_path.replace("temp_downloads\\", ""))
+            asyncio.create_task(asyncio.to_thread(os.remove, os.path.join(config.COMFYUI_INPUT_DIR, img_path.replace("temp_downloads\\", ""))))
 
 # --- Command Handlers ---
 @authorized
@@ -903,30 +907,21 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Clean up the downloaded image
             if os.path.exists(input_image_path):
                 os.remove(input_image_path)
+            if os.path.exists(comfy_input_image_path):
+                os.remove(comfy_input_image_path)   
             # Clean up ComfyUI temp directory
-            cleanup_comfy_temp_folder()            
-            
-            
+            cleanup_comfy_temp_folder()
+
 
     asyncio.create_task(process_and_respond())
 
 def cleanup_comfy_temp_folder():
     # Clean up ComfyUI temp directory
-            comfyui_temp_dir = "D:\\Repos\\ComfyUI_venv\\ComfyUI\\temp"
-            comfyui_input_dir = "D:\\Repos\\ComfyUI_venv\\ComfyUI\\input"
+            comfyui_temp_dir = "D:\\Repos\\ComfyUI_venv\\ComfyUI\\temp"            
             try:
                 if os.path.exists(comfyui_temp_dir):
                     for filename in os.listdir(comfyui_temp_dir):
                         temp_file_path = os.path.join(comfyui_temp_dir, filename)
-                        try:
-                            if os.path.isfile(temp_file_path):
-                                os.remove(temp_file_path)
-                                logger.info(f"Cleaned up ComfyUI temp file: {temp_file_path}")
-                        except Exception as e:
-                            logger.warning(f"Failed to delete ComfyUI temp file {temp_file_path}: {e}")
-                if os.path.exists(comfyui_input_dir):
-                    for filename in os.listdir(comfyui_input_dir):
-                        temp_file_path = os.path.join(comfyui_input_dir, filename)
                         try:
                             if os.path.isfile(temp_file_path):
                                 os.remove(temp_file_path)
@@ -1747,7 +1742,7 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
         image_paths = []
         for i, message in enumerate(messages):
             photo_file = await message.photo[-1].get_file()
-            image_path = os.path.join(temp_dir, f"{photo_file.file_id}_{i}.jpg")
+            image_path = os.path.join(temp_dir, f"{photo_file.file_id}_{i}_{message.id}.jpg")
             await photo_file.download_to_drive(image_path)
             image_paths.append(image_path)
         
@@ -1865,7 +1860,7 @@ async def generate_multi_image_task(update, context, prompt_text, negative_promp
             )
             
             # Clean up ComfyUI output files after successful sending
-            cleanup_comfyui_files_async(prompt_id, generated_image_path)
+            cleanup_comfyui_files_async(prompt_id, generated_image_path, image_paths)
         else:
             raise FileNotFoundError("The generated image file was not found.")
 

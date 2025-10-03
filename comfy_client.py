@@ -792,7 +792,7 @@ def delete_comfyui_files(file_paths):
     
     return deleted_files, failed_files
 
-def cleanup_comfyui_outputs(prompt_id, server_address, comfyui_output_dir="D:\\Repos\\ComfyUI_venv\\ComfyUI\\output"):
+def cleanup_comfyui_outputs(prompt_id, server_address, comfyui_output_dir="D:\\Repos\\ComfyUI_venv\\ComfyUI\\output", comfyui_input_dir="D:\\Repos\\ComfyUI_venv\\ComfyUI\\input"):
     """
     Clean up ComfyUI output files for a given prompt ID.
     
@@ -815,6 +815,7 @@ def cleanup_comfyui_outputs(prompt_id, server_address, comfyui_output_dir="D:\\R
         
         # Extract output files
         files_to_delete = extract_comfyui_output_files(history_data, comfyui_output_dir)
+        files_to_delete.extend(extract_comfyui_output_files(history_data, comfyui_input_dir))
         
         if files_to_delete:
             print(f"Found {len(files_to_delete)} ComfyUI output files to delete")
