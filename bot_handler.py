@@ -797,6 +797,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     os.makedirs(temp_dir, exist_ok=True)
 
     input_image_path = os.path.join(temp_dir, f"{photo_file.file_id}.jpg")
+    comfy_input_image_path = os.path.join(config.COMFYUI_INPUT_DIR, f"{photo_file.file_id}.jpg")
     await photo_file.download_to_drive(input_image_path)
 
     # Determine which model will be used BEFORE Magic Prompt enhancement
@@ -902,10 +903,38 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Clean up the downloaded image
             if os.path.exists(input_image_path):
                 os.remove(input_image_path)
+            # Clean up ComfyUI temp directory
+            cleanup_comfy_temp_folder()            
+            
+            
 
     asyncio.create_task(process_and_respond())
 
-
+def cleanup_comfy_temp_folder():
+    # Clean up ComfyUI temp directory
+            comfyui_temp_dir = "D:\\Repos\\ComfyUI_venv\\ComfyUI\\temp"
+            comfyui_input_dir = "D:\\Repos\\ComfyUI_venv\\ComfyUI\\input"
+            try:
+                if os.path.exists(comfyui_temp_dir):
+                    for filename in os.listdir(comfyui_temp_dir):
+                        temp_file_path = os.path.join(comfyui_temp_dir, filename)
+                        try:
+                            if os.path.isfile(temp_file_path):
+                                os.remove(temp_file_path)
+                                logger.info(f"Cleaned up ComfyUI temp file: {temp_file_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete ComfyUI temp file {temp_file_path}: {e}")
+                if os.path.exists(comfyui_input_dir):
+                    for filename in os.listdir(comfyui_input_dir):
+                        temp_file_path = os.path.join(comfyui_input_dir, filename)
+                        try:
+                            if os.path.isfile(temp_file_path):
+                                os.remove(temp_file_path)
+                                logger.info(f"Cleaned up ComfyUI temp file: {temp_file_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete ComfyUI temp file {temp_file_path}: {e}")
+            except Exception as e:
+                logger.warning(f"Error accessing ComfyUI temp directory: {e}")
 
 
 
@@ -1618,6 +1647,7 @@ async def generate_image_task(update, context, prompt_text, negative_prompt_text
         # Clean up the downloaded image for image-to-image
         if image_path and os.path.exists(image_path):
             os.remove(image_path)
+        cleanup_comfy_temp_folder() 
 
 async def handle_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -1726,9 +1756,9 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
             wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_CONTROLNET_FILE_PATH  
         elif 'qwen2509cn2' in prompt_text.lower():
             wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_CONTROLNET_FILE_PATH  
-        elif 'qwen25093' in prompt_text.lower():
+        elif 'qwen25093' in prompt_text.lower() or len(image_paths) == 3:
             wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_FILE_PATH    
-        elif 'qwen25092' in prompt_text.lower():
+        elif 'qwen25092' in prompt_text.lower() or len(image_paths) == 2:
             wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_FILE_PATH
         else:
             wf_path = config.QWEN_8_STEP_I2I_4_INPUTS_PATH
@@ -1846,9 +1876,12 @@ async def generate_multi_image_task(update, context, prompt_text, negative_promp
         )
     finally:
         # Clean up the downloaded images
-        for image_path in image_paths:
+        
+        for image_path in image_paths:            
             if os.path.exists(image_path):
                 os.remove(image_path)
+        # Clean up ComfyUI temp directory
+        cleanup_comfy_temp_folder()
 
 
 
@@ -1984,6 +2017,7 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Clean up the downloaded audio
             if os.path.exists(input_audio_path):
                 os.remove(input_audio_path)
+            cleanup_comfy_temp_folder() 
 
     asyncio.create_task(process_and_respond())
 

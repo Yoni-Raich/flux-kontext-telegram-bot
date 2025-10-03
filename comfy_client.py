@@ -825,3 +825,4 @@ def cleanup_comfyui_outputs(prompt_id, server_address, comfyui_output_dir="D:\\R
             
     except Exception as e:
         print(f"Error during ComfyUI cleanup: {e}")
+
