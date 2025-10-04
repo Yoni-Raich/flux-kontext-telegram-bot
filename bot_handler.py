@@ -800,8 +800,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     temp_dir = "temp_downloads"
     os.makedirs(temp_dir, exist_ok=True)
 
-    input_image_path = os.path.join(temp_dir, f"{photo_file.file_id}.jpg")
-    comfy_input_image_path = os.path.join(config.COMFYUI_INPUT_DIR, f"{photo_file.file_id}.jpg")
+    input_image_path = os.path.join(temp_dir, f"{photo_file.file_id}_{update.message.id}.jpg")
+    comfy_input_image_path = os.path.join(config.COMFYUI_INPUT_DIR, f"{photo_file.file_id}_{update.message.id}.jpg")
     await photo_file.download_to_drive(input_image_path)
 
     # Determine which model will be used BEFORE Magic Prompt enhancement
@@ -835,6 +835,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wf_path = config.QWEN_4_STEP_I2I_FILE_PATH
     elif 'qwen8' in prompt_text.lower():
         wf_path = config.QWEN_8_STEP_I2I_FILE_PATH
+    elif 'nnchqwen2509' in prompt_text.lower():
+        wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_1_INPUT_FILE_PATH
     elif 'qwen2509' in prompt_text.lower():
         wf_path = config.QWEN_2509_4_STEP_I2I_1_INPUT_FILE_PATH
     else:
@@ -849,7 +851,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if prompt_text:
-        prompt_text = re.sub(r'\b(wan21|qwen4|qwen8|nunchakuflux|fluxmaniaup|nnchflxasd)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+        prompt_text = re.sub(r'\b(wan21|qwen4|qwen8|nunchakuflux|fluxmaniaup|nnchflxasd|nnchqwen2509)\b', '', prompt_text, flags=re.IGNORECASE).strip()
         prompt_text = re.sub(r'qwen2509\w*', '', prompt_text, flags=re.IGNORECASE).strip()
     async def process_and_respond(): 
         nonlocal prompt_text, neg_prompt_text 
@@ -1747,7 +1749,19 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
             image_paths.append(image_path)
         
         # Determine workflow
-        if 'qwen2509cn3' in prompt_text.lower():
+        if 'nnchqwen25092' in prompt_text.lower() or len(image_paths) == 2:
+            wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_2_INPUTS_FILE_PATH
+        elif 'nnchqwen25093' in prompt_text.lower() or len(image_paths) == 3:
+            wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_3_INPUTS_FILE_PATH
+        elif 'nnchqwen2509cnpose2' in prompt_text.lower():
+            wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_2_INPUTS_CONTROLNET_DWPOSE_FILE_PATH
+        elif 'nnchqwen2509cnpose3' in prompt_text.lower():
+            wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_3_INPUTS_CONTROLNET_DWPOSE_FILE_PATH
+        elif 'nnchqwen2509cndepth2' in prompt_text.lower():
+            wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_2_INPUTS_CONTROLNET_DEPTH_FILE_PATH
+        elif 'nnchqwen2509cndepth3' in prompt_text.lower():
+            wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_3_INPUTS_CONTROLNET_DEPTH_FILE_PATH
+        elif 'qwen2509cn3' in prompt_text.lower():
             wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_CONTROLNET_FILE_PATH  
         elif 'qwen2509cn2' in prompt_text.lower():
             wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_CONTROLNET_FILE_PATH  
@@ -1779,7 +1793,9 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
         # Clean prompt text
         if prompt_text:
             prompt_text = re.sub(r'\b(wan21|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+            prompt_text = re.sub(r'nnchqwen2509\w*', '', prompt_text, flags=re.IGNORECASE).strip()
             prompt_text = re.sub(r'qwen2509\w*', '', prompt_text, flags=re.IGNORECASE).strip()
+            
         
         # Create a fake update object for compatibility with existing functions
         # Make sure to include the effective_user with proper id
