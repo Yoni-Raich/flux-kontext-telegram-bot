@@ -123,6 +123,11 @@
         "lora": "Wan2.1_T2V_14B_FusionX_LoRA.safetensors",
         "strength": 1
       },
+	  "lora_3": {
+        "on": false,
+        "lora": "Goofballs_WAN_21_22.safetensors",
+        "strength": 0.9
+      },
       "➕ Add Lora": "",
       "model": [
         "9",

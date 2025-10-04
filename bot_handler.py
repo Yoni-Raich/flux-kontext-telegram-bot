@@ -976,6 +976,8 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
         wf_path = config.QWEN_4_STEP_T2I_FILE_PATH
     elif 'qwen8' in prompt_text.lower():
         wf_path = config.QWEN_8_STEP_T2I_FILE_PATH
+    elif 'wan22t2i4' in prompt_text.lower():
+        wf_path = config.WAN_2_2_4STEPS_T2I_FILE_PATH
     elif 'wan22dslr4' in prompt_text.lower():
         wf_path = config.WAN_2_2_4STEPS_T2I_DSLR_LORA_FILE_PATH
     else:
@@ -984,7 +986,7 @@ async def handle_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
         else:             
             wf_path = config.WAN_T2I_WORKFLOW__NOGRAIN_FILE_PATH
 
-    prompt_text = re.sub(r'\b(kreawf|kreasmp|wan21|wan22dslr4|qwen4|qwen8)\b', '', prompt_text, flags=re.IGNORECASE).strip()
+    prompt_text = re.sub(r'\b(kreawf|kreasmp|wan21|wan22dslr4|qwen4|qwen8|wan22t2i4|kontext)\b', '', prompt_text, flags=re.IGNORECASE).strip()
     logger.info(f'wf path: {wf_path}\n\n')
     workflow_name = wf_path.split('/')[-1].split('.')[0]
 
@@ -1174,7 +1176,19 @@ def parse_prompt_flags(prompt_text):
         prompt_text = prompt_text.replace('--cnopenpose', '')
     elif '--cndepth' in prompt_text:
         flags['cndepth'] = True
-        prompt_text = prompt_text.replace('--cndepth', '')          
+        prompt_text = prompt_text.replace('--cndepth', '')   
+
+    # Extract --powerlora flag and value
+    powerlora_matches = re.findall(r'--powerlora\s+([^-]+)', prompt_text)
+    if powerlora_matches:
+        # Split each match into individual keywords and flatten
+        all_keywords = []
+        for match in powerlora_matches:
+            keywords = match.strip().split()
+            all_keywords.extend(keywords)
+        flags['powerlora'] = all_keywords
+        # Remove all --powerlora sections from prompt
+        prompt_text = re.sub(r'--powerlora\s+[^-]+', '', prompt_text)      
     
     # Extract --neg flag and value
     neg_match = re.search(r'--neg\s+(.+)', prompt_text)
