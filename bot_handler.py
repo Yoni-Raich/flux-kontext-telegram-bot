@@ -1749,9 +1749,9 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
             image_paths.append(image_path)
         
         # Determine workflow
-        if 'nnchqwen25092' in prompt_text.lower() or len(image_paths) == 2:
+        if 'nnchqwen25092' in prompt_text.lower() and len(image_paths) == 2:
             wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_2_INPUTS_FILE_PATH
-        elif 'nnchqwen25093' in prompt_text.lower() or len(image_paths) == 3:
+        elif 'nnchqwen25093' in prompt_text.lower() and len(image_paths) == 3:
             wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_3_INPUTS_FILE_PATH
         elif 'nnchqwen2509cnpose2' in prompt_text.lower():
             wf_path = config.NUNCHAKU_QWEN2509_8_STEP_I2I_2_INPUTS_CONTROLNET_DWPOSE_FILE_PATH
@@ -1765,9 +1765,9 @@ async def process_multi_image_request(messages, prompt_text, context, user_id):
             wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_CONTROLNET_FILE_PATH  
         elif 'qwen2509cn2' in prompt_text.lower():
             wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_CONTROLNET_FILE_PATH  
-        elif 'qwen25093' in prompt_text.lower() or len(image_paths) == 3:
+        elif 'qwen25093' in prompt_text.lower() and len(image_paths) == 3:
             wf_path = config.QWEN_2509_4_STEP_I2I_3_INPUTS_FILE_PATH    
-        elif 'qwen25092' in prompt_text.lower() or len(image_paths) == 2:
+        elif 'qwen25092' in prompt_text.lower() and len(image_paths) == 2:
             wf_path = config.QWEN_2509_4_STEP_I2I_2_INPUTS_FILE_PATH
         else:
             wf_path = config.QWEN_8_STEP_I2I_4_INPUTS_PATH

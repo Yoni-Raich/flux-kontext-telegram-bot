@@ -1,7 +1,7 @@
 {
   "3": {
     "inputs": {
-      "seed": 229539765128815,
+      "seed": 376744622009538,
       "steps": 8,
       "cfg": 1,
       "sampler_name": "euler",
@@ -120,7 +120,7 @@
   },
   "109": {
     "inputs": {
-      "image": ""
+      "image": "photo_2025-10-04_19-59-35.jpg"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -141,7 +141,7 @@
   },
   "113": {
     "inputs": {
-      "prompt": "",
+      "prompt": "make her cry",
       "clip": [
         "38",
         0
@@ -209,13 +209,31 @@
   },
   "118": {
     "inputs": {
-      "width": 1024,
-      "height": 1024,
+      "width": [
+        "134",
+        0
+      ],
+      "height": [
+        "134",
+        1
+      ],
       "batch_size": 1
     },
     "class_type": "EmptySD3LatentImage",
     "_meta": {
       "title": "EmptySD3LatentImage"
+    }
+  },
+  "134": {
+    "inputs": {
+      "image": [
+        "100",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Get Image Size"
     }
   }
 }

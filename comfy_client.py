@@ -106,7 +106,7 @@ def generate_image(prompt_text: str,
         workflow = json.load(f)
 
     # Find the correct nodes dynamically
-    text_node = find_node_by_class(workflow, "CLIPTextEncode") or find_node_by_class(workflow, "TextEncodeQwenImageEdit") or find_node_by_class(workflow, "PrimitiveStringMultiline")
+    text_node = find_node_by_class(workflow, "CLIPTextEncode") or find_node_by_class(workflow, "TextEncodeQwenImageEdit") or find_node_by_class(workflow, "PrimitiveStringMultiline") or find_node_by_class(workflow, "TextEncodeQwenImageEditPlus")
     if neg_prompt_text:
         neg_prompt_text_node = find_node_by_class(workflow, "CLIPTextEncode", neg_text=True)
     ksampler_node = find_node_by_class(workflow, "KSampler")
