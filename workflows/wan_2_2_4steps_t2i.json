@@ -121,12 +121,7 @@
       "lora_2": {
         "on": false,
         "lora": "Goofballs_WAN_21_22.safetensors",
-        "strength": 1
-      },
-      "lora_3": {
-        "on": true,
-        "lora": "Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_LOW_fp16.safetensors",
-        "strength": 1
+        "strength": 0.80
       },
       "➕ Add Lora": "",
       "model": [

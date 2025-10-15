@@ -126,7 +126,7 @@
 	  "lora_3": {
         "on": false,
         "lora": "Goofballs_WAN_21_22.safetensors",
-        "strength": 0.9
+        "strength": 0.80
       },
       "➕ Add Lora": "",
       "model": [

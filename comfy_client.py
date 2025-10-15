@@ -136,7 +136,11 @@ def generate_image(prompt_text: str,
     update_resolution(workflow, resize_resolution, allow_resize)
 
     # Update ControlNet switch if flags are present
-    update_controlnet_switch(workflow, flags or {})    
+    update_controlnet_switch(workflow, flags or {})  
+
+    update_power_lora_loader(workflow, flags or {})  
+
+    update_image_pad_for_outpaint(workflow, flags or {})
 
     # Handle image assignment to LoadImage nodes
     if uploaded_filenames:
@@ -248,6 +252,33 @@ def generate_image(prompt_text: str,
         print("Output image not found in history.\n\n")
         return None, None, None, None
     
+
+def update_power_lora_loader(workflow, flags):
+    """Update Power Lora Loader based on powerlora flags."""
+    if not flags.get('powerlora'):
+        return
+    
+    # Find the Power Lora Loader node using existing function
+    power_lora_node = find_node_by_class(workflow, "Power Lora Loader (rgthree)")
+    
+    if not power_lora_node:
+        print("Warning: Power Lora Loader node not found in workflow")
+        return
+    
+    powerlora_keywords = flags['powerlora']
+    node_inputs = workflow[power_lora_node]['inputs']
+    
+    # Iterate through all lora entries in the node
+    for key, value in node_inputs.items():
+        if key.startswith('lora_') and isinstance(value, dict) and 'lora' in value:
+            lora_filename = value['lora'].lower()
+            
+            # Check if any of the powerlora keywords match this lora filename
+            should_enable = any(keyword.lower() in lora_filename for keyword in powerlora_keywords)
+            
+            if should_enable:
+                value['on'] = True
+                print(f"Enabled LoRA: {value['lora']} (matched keyword)")
 
 def update_sampler(workflow, node_id):
     """
@@ -475,6 +506,27 @@ def update_resolution(workflow, resize_resolution, allow_resize=False):
                          width=width, height=height, allow_resize=allow_resize)
                 break
 
+def update_image_pad_for_outpaint(workflow, flags):
+    """Update ImagePadForOutpaint node based on extend flags."""
+    if not flags.get('extend'):
+        return
+    
+    # Find the ImagePadForOutpaint node
+    pad_node = find_node_by_class(workflow, "ImagePadForOutpaint")
+    
+    if not pad_node:
+        print("Warning: ImagePadForOutpaint node not found in workflow")
+        return
+    
+    extend_values = flags['extend']
+    
+    # Update the padding values
+    workflow[pad_node]['inputs']['left'] = extend_values['left']
+    workflow[pad_node]['inputs']['top'] = extend_values['top']
+    workflow[pad_node]['inputs']['right'] = extend_values['right']
+    workflow[pad_node]['inputs']['bottom'] = extend_values['bottom']
+    
+    print(f"Updated ImagePadForOutpaint: left={extend_values['left']}, top={extend_values['top']}, right={extend_values['right']}, bottom={extend_values['bottom']}")
 
 def generate_audio(
     audio_path: str,

@@ -691,18 +691,22 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• \\-\\-cfg X\\.X \\- Classifier\\-Free Guidance scale\n"
             "• \\-\\-seed XXXXX \\- Specific seed for reproducibility\n"
             "• \\-\\-res WIDTHxHEIGHT \\- Custom resolution\n"
-            "• \\-\\-neg text \\- Negative prompt \\(WAN only\\)\n\n"
+            "• \\-\\-neg text \\- Negative prompt \\(WAN only\\)\n"
+            "• \\-\\-extend L T R B \\- Outpainting padding \\(left top right bottom\\)\n\n"
             "*Resolution Limits:*\n"
             "• Square \\(1:1\\): max 1400x1400\n"
             "• Landscape: max 1920x1080\n"
             "• Portrait: max 1080x1920\n\n"
+            "*Extend Examples:*\n"
+            "• \\-\\-extend 0 256 0 0 \\- Extend upward\n"
+            "• \\-\\-extend 0 0 256 0 \\- Extend to the right\n"
+            "• \\-\\-extend 128 128 128 128 \\- Extend all sides\n\n"
             "*Example:*\n"
             "```shell\n"
-            "\\-\\-cfg 2\\.5 \\-\\-steps 30 \\-\\-res 1920x1080 landscape photo\n"
+            "\\-\\-extend 0 256 0 0 \\(recommended to use an empty prompt\\)\n"
             "```"
         )
-        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)
-    
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=back_markup)    
     elif callback_data == "help_magic":
         magic_status = "ON" if context.user_data.get('magic_prompt', True) else "OFF"
         magic_available = "✨ Available" if GEMINI_AVAILABLE else "❌ Not Available"
@@ -741,6 +745,8 @@ def determine_model_name(prompt_text, flags, is_image_to_image=False):
     """
     if is_image_to_image:
         # Image-to-Image logic
+        if 'extend' in flags:
+            return "QWEN Edit 2509"
         if 'upscale' in flags:
             if prompt_text and 'wan21' in prompt_text.lower():
                 return "WAN 2.1 Upscaler"
@@ -796,6 +802,11 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     prompt_text, neg_prompt_text, flags = parse_prompt_flags(prompt_text)
 
+    # Check for extend flag errors
+    if 'extend_error' in flags:
+        await update.message.reply_text(f"❌ {flags['extend_error']}")
+        return
+
     # Create a temporary directory for downloads if it doesn't exist
     temp_dir = "temp_downloads"
     os.makedirs(temp_dir, exist_ok=True)
@@ -827,6 +838,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             wf_path = config.FLUXMANIA_UPSCALER_2048_FILE_PATH                     
         else:
             wf_path = config.QWEN_UPSCALER_FILE_PATH
+    elif 'extend' in flags:
+        wf_path = config.EXTEND_IMAGE_OUTPAINTING_QWEN_WORKFLOW_PATH
     elif 'simpleup' in flags:
         wf_path = config.SIMPLE_UPSCALER_PATH
     elif 'kontext' in prompt_text.lower():
@@ -1147,6 +1160,44 @@ def parse_prompt_flags(prompt_text):
     if cfg_match:
         flags['cfg'] = float(cfg_match.group(1))
         prompt_text = prompt_text.replace(cfg_match.group(0), '')
+
+
+    # Extract --extend flag and values (4 integers: left top right bottom)
+    
+    extend_match = re.search(r'--extend\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)', prompt_text)
+    if '--extend' in prompt_text and not extend_match:
+        # Found --extend but not with 4 values - incomplete
+        flags['extend_error'] = 'The --extend flag requires exactly 4 values: left top right bottom. Example: --extend 0 256 0 0'
+        # Remove the incomplete flag from prompt
+        prompt_text = re.sub(r'--extend\s+.*?(?=\s--|$)', '', prompt_text).strip()
+ 
+    if extend_match:
+        try:
+            left = int(extend_match.group(1))
+            top = int(extend_match.group(2))
+            right = int(extend_match.group(3))
+            bottom = int(extend_match.group(4))
+            
+            # Validate the extend values
+            is_valid, error_message = validate_extend_values(left, top, right, bottom)
+            
+            if is_valid:
+                flags['extend'] = {
+                    'left': left,
+                    'top': top,
+                    'right': right,
+                    'bottom': bottom
+                }
+                prompt_text = prompt_text.replace(extend_match.group(0), '')
+                print(f"Extend padding set to: left={left}, top={top}, right={right}, bottom={bottom}")
+            else:
+                print(f"Warning: Invalid extend values - {error_message}, ignoring extend flag")
+                # Remove the invalid flag from prompt but don't set the flag
+                prompt_text = prompt_text.replace(extend_match.group(0), '')
+                
+        except ValueError as e:
+            print(f"Warning: Invalid extend values - must be integers, ignoring extend flag")
+            prompt_text = prompt_text.replace(extend_match.group(0), '')
 
     # Extract --temperature flag and value (for audio generation)
     temperature_match = re.search(r'--temperature\s+([\d.]+)', prompt_text)
@@ -2213,3 +2264,35 @@ async def send_audio_with_logging(
                         )
         except Exception as e:
             logger.error(f"Failed to send audio to logging group: {e}")
+
+
+
+def validate_extend_values(left, top, right, bottom, max_padding=2048):
+    """
+    Validate extend padding values.
+    
+    Args:
+        left, top, right, bottom: Padding values
+        max_padding: Maximum allowed padding value
+    
+    Returns:
+        tuple: (is_valid: bool, error_message: str or None)
+    """
+    # Check if all values are non-negative
+    if any(val < 0 for val in [left, top, right, bottom]):
+        return False, "Padding values cannot be negative"
+    
+    # Check if values exceed maximum
+    if any(val > max_padding for val in [left, top, right, bottom]):
+        return False, f"Padding values too large (max {max_padding})"
+    
+    # Check if at least one value is greater than 0 (otherwise no extension)
+    if all(val == 0 for val in [left, top, right, bottom]):
+        return False, "At least one padding value must be greater than 0"
+    
+    # Check for extremely large total padding that might cause memory issues
+    total_padding = sum([left, top, right, bottom])
+    if total_padding > max_padding * 2:
+        return False, f"Total padding too large ({total_padding} > {max_padding * 2})"
+    
+    return True, None
