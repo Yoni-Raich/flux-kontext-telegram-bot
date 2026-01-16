@@ -1,0 +1,81 @@
+{
+  "1": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "factor": 2,
+      "upscale_model": [
+        "6",
+        0
+      ],
+      "image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "Upscale by Factor with Model (WLSH)",
+    "_meta": {
+      "title": "Upscale by Factor with Model (WLSH)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "3": {
+    "inputs": {
+      "rgthree_comparer": {
+        "images": [
+          {
+            "name": "A",
+            "selected": true,
+            "url": "/api/view?filename=rgthree.compare._temp_keubh_00003_.png&type=temp&subfolder=&rand=0.08106509213356516"
+          },
+          {
+            "name": "B",
+            "selected": true,
+            "url": "/api/view?filename=rgthree.compare._temp_keubh_00004_.png&type=temp&subfolder=&rand=0.04843737131382786"
+          }
+        ]
+      },
+      "image_a": [
+        "5",
+        0
+      ],
+      "image_b": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "Image Comparer (rgthree)",
+    "_meta": {
+      "title": "Image Comparer (rgthree)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "image": "ComfyUI_00326_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "model_name": "4x-ClearRealityV1.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Load Upscale Model"
+    }
+  }
+}

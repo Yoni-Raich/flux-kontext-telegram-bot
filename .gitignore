@@ -9,6 +9,7 @@ __pycache__/
 venv/
 .venv/
 config.py
+config.json
 
 # Generated files and media
 output/

@@ -1,0 +1,60 @@
+{
+  "589": {
+    "inputs": {
+      "text": [
+        "594",
+        0
+      ],
+      "model": "VibeVoice-Large",
+      "attention_type": "auto",
+      "free_memory_after_generate": true,
+      "diffusion_steps": 30,
+      "seed": 3633220125,
+      "cfg_scale": 1.7,
+      "use_sampling": false,
+      "temperature": 0.80,
+      "top_p": 0.95,
+      "speaker1_voice": [
+        "596",
+        0
+      ]
+    },
+    "class_type": "VibeVoiceMultipleSpeakersNode",
+    "_meta": {
+      "title": "VibeVoice Multiple Speakers"
+    }
+  },
+  "594": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "String (Multiline)"
+    }
+  },
+  "595": {
+    "inputs": {
+      "filename_prefix": "audio/ComfyUI",
+      "audioUI": "",
+      "audio": [
+        "589",
+        0
+      ]
+    },
+    "class_type": "SaveAudio",
+    "_meta": {
+      "title": "SaveAudio VibeVoice"
+    }
+  },
+  "596": {
+    "inputs": {
+      "audio": "",
+      "audioUI": ""
+    },
+    "class_type": "LoadAudio",
+    "_meta": {
+      "title": "LoadAudio"
+    }
+  }
+}
